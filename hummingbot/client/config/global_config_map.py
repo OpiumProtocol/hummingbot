@@ -275,6 +275,15 @@ global_config_map = {
                   type_str="json",
                   required_if=lambda: False,
                   default={}),
+    # TODO: Opium-verify
+    "opium_api_key": ConfigVar(key="opium_api_key",
+                               prompt="Enter your Opium API key >>> ",
+                               required_if=using_exchange("opium"),
+                               is_secure=True),
+    "opium_secret_key": ConfigVar(key="opium_secret_key",
+                                  prompt="Enter your v secret key >>> ",
+                                  required_if=using_exchange("opium"),
+                                  is_secure=True),
     # Whether or not to invoke cancel_all on exit if marketing making on a open order book DEX (e.g. Radar Relay)
     "on_chain_cancel_on_exit":
         ConfigVar(key="on_chain_cancel_on_exit",

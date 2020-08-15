@@ -37,13 +37,17 @@ EXCHANGES = {
     "bittrex",
     "kucoin",
     "eterbase",
-    "kraken"
+    "kraken",
+    # TODO: Opium-verify
+    "opium"
 }
 
 DEXES = {
     "bamboo_relay",
     "radar_relay",
-    "dolomite"
+    "dolomite",
+    # TODO: Opium-verify
+    "opium"
 }
 
 STRATEGIES: List[str] = get_strategy_list()
@@ -59,7 +63,9 @@ EXAMPLE_PAIRS = {
     "liquid": "ETH-USD",
     "radar_relay": "ZRX-WETH",
     "eterbase": "ETH-EUR",
-    "kraken": "ETH-USDC"
+    "kraken": "ETH-USDC",
+    # TODO: Opium-verify
+    "opium": "ETH-USDC"
 }
 
 EXAMPLE_ASSETS = {
@@ -73,7 +79,9 @@ EXAMPLE_ASSETS = {
     "liquid": "ETH",
     "radar_relay": "ZRX",
     "eterbase": "ETH",
-    "kraken": "XETH"
+    "kraken": "XETH",
+    # TODO: Opium-verify
+    "opium": "ETH"
 }
 
 MAXIMUM_OUTPUT_PANE_LINE_COUNT = 1000

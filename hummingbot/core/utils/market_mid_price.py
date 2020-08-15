@@ -27,6 +27,8 @@ def get_mid_price(exchange: str, trading_pair: str) -> Optional[Decimal]:
         return kraken_mid_price(trading_pair)
     elif exchange == "coinbase_pro":
         return coinbase_pro_mid_price(trading_pair)
+    elif exchange == "opium":
+        return opium_mid_price(trading_pair)
     else:
         return binance_mid_price(trading_pair)
 
@@ -101,4 +103,15 @@ def coinbase_pro_mid_price(trading_pair: str) -> Optional[Decimal]:
     record = resp.json()
     if "bid" in record and "ask" in record:
         result = (Decimal(record["bid"]) + Decimal(record["ask"])) / Decimal("2")
+        return result
+
+
+# TODO: Opium-verify
+@cachetools.func.ttl_cache(ttl=10)
+def opium_mid_price(trading_pair: str) -> Optional[Decimal]:
+    resp = requests.get(url=...)
+    records = resp.json()
+    result = None
+    for record in records:
+        # pair = opium.convert_from_exchange_trading_pair(record["symbol"])
         return result

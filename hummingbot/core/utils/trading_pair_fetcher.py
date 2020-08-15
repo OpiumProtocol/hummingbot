@@ -24,6 +24,8 @@ KUCOIN_ENDPOINT = "https://api.kucoin.com/api/v1/symbols"
 DOLOMITE_ENDPOINT = "https://exchange-api.dolomite.io/v1/markets"
 ETERBASE_ENDPOINT = "https://api.eterbase.exchange/api/markets"
 KRAKEN_ENDPOINT = "https://api.kraken.com/0/public/AssetPairs"
+# TODO: Opium-verify
+OPIUM_ENDPOINT = ""
 
 API_CALL_TIMEOUT = 5
 
@@ -327,6 +329,23 @@ class TradingPairFetcher:
 
         return []
 
+    # TODO: Opium-verify
+    @staticmethod
+    async def fetch_opium_trading_pairs() -> List[str]:
+        # Returns a List of str, representing each active trading pair on the exchange.
+        async with aiohttp.ClientSession() as client:
+            async with client.get(OPIUM_ENDPOINT, timeout=API_CALL_TIMEOUT) as response:
+                if response.status == 200:
+                    try:
+                        all_trading_pairs: List[Dict[str, any]] = await response.json()
+                        return [item["symbol"]
+                                for item in all_trading_pairs
+                                if item["status"] == "ONLINE"]  # Only returns active trading pairs
+                    except Exception:
+                        pass
+                        # Do nothing if the request fails -- there will be no autocomplete available
+                return []
+
     async def fetch_all(self):
         tasks = [self.fetch_binance_trading_pairs(),
                  self.fetch_bamboo_relay_trading_pairs(),
@@ -338,7 +357,8 @@ class TradingPairFetcher:
                  self.fetch_kucoin_trading_pairs(),
                  self.fetch_kraken_trading_pairs(),
                  self.fetch_radar_relay_trading_pairs(),
-                 self.fetch_eterbase_trading_pairs()]
+                 self.fetch_eterbase_trading_pairs(),
+                 self.fetch_opium_trading_pairs()]
 
         # Radar Relay has not yet been migrated to a new version
         # Endpoint needs to be updated after migration
@@ -357,5 +377,7 @@ class TradingPairFetcher:
             "kraken": results[8],
             "radar_relay": results[9],
             "eterbase": results[10],
+            # TODO: Opium-verify
+            "opium": results[0]
         }
         self.ready = True

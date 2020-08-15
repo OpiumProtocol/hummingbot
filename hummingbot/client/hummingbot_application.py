@@ -20,6 +20,7 @@ from hummingbot.market.huobi.huobi_market import HuobiMarket
 from hummingbot.market.liquid.liquid_market import LiquidMarket
 from hummingbot.market.eterbase.eterbase_market import EterbaseMarket
 from hummingbot.market.market_base import MarketBase
+from hummingbot.market.opium.opium_market import OpiumMarket
 from hummingbot.market.paper_trade import create_paper_trade_market
 from hummingbot.market.radar_relay.radar_relay_market import RadarRelayMarket
 from hummingbot.market.bamboo_relay.bamboo_relay_market import BambooRelayMarket
@@ -61,7 +62,8 @@ MARKET_CLASSES = {
     "bittrex": BittrexMarket,
     "kucoin": KucoinMarket,
     "eterbase": EterbaseMarket,
-    "kraken": KrakenMarket
+    "kraken": KrakenMarket,
+    "opium": OpiumMarket
 }
 
 
@@ -355,6 +357,17 @@ class HummingbotApplication(*commands):
                                       order_book_tracker_data_source_type=OrderBookTrackerDataSourceType.EXCHANGE_API,
                                       trading_pairs=trading_pairs,
                                       trading_required=self._trading_required)
+            # TODO: Opium-verify
+            elif market_name == "opium":
+                opium_api_key = global_config_map.get("opium_api_key").value
+                opium_secret_key = global_config_map.get("opium_secret_key").value
+                opium_passphrase = global_config_map.get("opium_passphrase").value
+
+                market = OpiumMarket(opium_api_key,
+                                     opium_secret_key,
+                                     opium_passphrase,
+                                     # symbols=symbols,
+                                     trading_required=self._trading_required)
             else:
                 raise ValueError(f"Market name {market_name} is invalid.")
 
