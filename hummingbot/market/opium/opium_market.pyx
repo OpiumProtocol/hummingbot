@@ -1,3 +1,5 @@
+import asyncio
+from decimal import Decimal
 from typing import (
     Dict,
     List,
@@ -7,9 +9,7 @@ from typing import (
     Tuple,
 )
 
-import asyncio
-
-from decimal import Decimal
+from hummingbot.market.opium.opium_order_book_tracker import OpiumOrderBookTracker
 
 from hummingbot.core.network_iterator import NetworkStatus
 from hummingbot.core.data_type.order_book cimport OrderBook

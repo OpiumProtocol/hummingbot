@@ -378,6 +378,6 @@ class TradingPairFetcher:
             "radar_relay": results[9],
             "eterbase": results[10],
             # TODO: Opium-verify
-            "opium": results[0]
+            "opium": results[11]
         }
         self.ready = True
