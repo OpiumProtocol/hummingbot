@@ -10,7 +10,7 @@ import time
 import socketio
 
 from hummingbot.core.data_type.order_book import OrderBook
-# from hummingbot.core.data_type.order_book_message import OrderBookMessage
+from hummingbot.core.data_type.order_book_message import OrderBookMessage
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
 
 from hummingbot.logger import HummingbotLogger
@@ -25,30 +25,6 @@ EXCHANGE_INFO_URL = "TODO"
 
 sio: socketio.Client = socketio.AsyncClient(engineio_logger=True, logger=True)
 
-# class OpiumSIOClient(socketio.AsyncClientNamespace):
-
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         self.trades_queue = asyncio.Queue()
-#         self.snapshot_queue = asyncio.Queue()
-#         self._subbed = False
-
-#     def on_connect(self):
-#         print("connected")
-#         self._subbed = True
-
-
-#     async def on_listen_trades(self, data):
-#         print("on_listen_trades")
-#         await self.trades_queue.put(data)
-
-#     async def on_get_snapshot(self, data):
-#         print("on_get_snapshot")
-#         await self.snapshot_queue.put(data)
-
-#     async def on_error(self, err=None):
-#         print("on_error")
-#         print(err)
 trades_queue = asyncio.Queue()
 snapshot_queue = asyncio.Queue()
 order_book_diffs_queue = asyncio.Queue()
@@ -107,14 +83,17 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
     @staticmethod
     async def get_snapshot(queue: asyncio.Queue) -> Dict[str, Any]:
         print("get_snapshot")
+        # TODO: This needs to get the data on demand - not wait for it
         while True:
             print("getting snapshot data...")
             data = await queue.get()
             print("data from snapshot queue!")
             print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
             print(data)
-            return data
             print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+            print(data["p"]["c"])
+            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+            return data
 
     # TODO: opium
     # - [ ] figure out how to use socketio
@@ -170,7 +149,6 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
             self._sio_connected = True
 
     # TODO: opium
-    # - [ ] figure out how to use socketio lib instead of websockets lib
     # - [ ] get the api route / socketio namespace for listening to trades
     async def listen_for_trades(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
         ticker = '0x598cc7d5b3a09a27e68b450610d5b47d86cc8602308f23232c03571f79e65a77'
@@ -189,10 +167,9 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
             self.logger.info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
             self.logger.info(data)
             self.logger.info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-            await asyncio.sleep(0.01)
+            output.put_nowait(data)
 
     # TODO: opium
-    # - [ ] figure out how to use socketio lib instead of websockets lib
     # - [ ] get the api route / socketio namespace for getting new order book
     async def get_new_order_book(self, trading_pair: str) -> OrderBook:
         self.logger.info("get_new_order_book")
@@ -203,17 +180,17 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
         snapshot_timestamp: float = time.time()
         order_book: OrderBook = self.order_book_create_function()
         # TODO:
-        # snapshot_msg: OrderBookMessage = OpiumOrderBook.snapshot_message_from_exchange(
-        #     snapshot,
-        #     snapshot_timestamp,
-        #     metadata={"trading_pair": trading_pair}
-        # )
+        snapshot_msg: OrderBookMessage = OpiumOrderBook.snapshot_message_from_exchange(
+            snapshot,
+            snapshot_timestamp,
+            metadata={"trading_pair": trading_pair}
+        )
         # TODO:
+        # order_book.apply_snapshot()
         # order_book.apply_snapshot(snapshot_msg.bids, snapshot_msg.asks, snapshot_msg.update_id)
         return order_book
 
     # TODO: opium
-    # - [ ] figure out how to use socketio lib instead of websockets lib
     # - [ ] get the api route / socketio namespace for order book snapshots
     async def listen_for_order_book_diffs(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
         ticker = '0x598cc7d5b3a09a27e68b450610d5b47d86cc8602308f23232c03571f79e65a77'
@@ -229,49 +206,8 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
             self.logger.info("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
             self.logger.info(data)
             self.logger.info("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-            await asyncio.sleep(0.01)
-
-        # sio.register_namespace(self._opium_sio_client)
-        # await sio.connect(url='https://api-test.opium.exchange', transports=['polling', 'websocket'], namespaces=['/v1'])
-
-        # await sio.emit("subscribe", {'ch': 'error:message'})
-        # await sio.emit("subscribe", {
-        #         'ch': 'orderbook:orders:ticker',
-        #         't': ticker,
-        #         'c': currency})
-
-        # @sio.on('orderbook:orders:ticker')
-    # async def update_diff(self):
-    #     while True:
-    #         print("updating diff")
-    #         data = await self._opium_sio_client.trades_queue.get()
-    #         self.logger .info("data update diff!")
-    #         self.logger .info("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
-    #         self.logger .info(data)
-    #         self.logger .info("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
-        #     try:
-        #         # ws_path: str = "/".join([f"{trading_pair.lower()}@depth" for trading_pair in self._trading_pairs])
-        #         # TODO
-        #         ws_path = ""
-        #         stream_url: str = f"{DIFF_STREAM_URL}/{ws_path}"
-        #         print("Listening for order book diffs")
-        #         await asyncio.sleep(30)
-        #         # async with websockets.connect(stream_url) as ws:
-        #         #     ws: websockets.WebSocketClientProtocol = ws
-        #             # async for raw_msg in self._inner_messages(ws):
-        #             #     msg = ujson.loads(raw_msg)
-        #                 # order_book_message: OrderBookMessage = OpiumOrderBook.diff_message_from_exchange(
-        #                 #     msg, time.time())
-        #                 # output.put_nowait(order_book_message)
-        #     except asyncio.CancelledError:
-        #         raise
-        #     except Exception:
-        #         self.logger().error("Unexpected error with WebSocket connection. Retrying after 30 seconds...",
-        #                             exc_info=True)
-        #         await asyncio.sleep(30.0)
 
     # TODO: opium
-    # - [ ] figure out how to use socketio lib instead of websockets lib
     # - [ ] get the api route / socketio namespace for order book snapshots
     async def listen_for_order_book_snapshots(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
         # print("listening for order book snapshots")
@@ -366,3 +302,4 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
     def _transform_raw_message(self, msg) -> Dict[str, Any]:
         output: Dict[str, Any] = {}
+        return {}
