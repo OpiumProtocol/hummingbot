@@ -1,7 +1,7 @@
 import logging
 import re
 
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Callable
 
 import ujson
 import asyncio
@@ -50,6 +50,16 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
         super().__init__(trading_pairs)
         self._trading_pairs: Optional[List[str]] = trading_pairs
         self._order_book_create_function = lambda: OrderBook()
+
+
+    @property
+    def order_book_create_function(self) -> Callable[[], OrderBook]:
+        return self._order_book_create_function
+
+    @order_book_create_function.setter
+    def order_book_create_function(self, func: Callable[[], OrderBook]):
+        self._order_book_create_function = func
+
 
     # TODO
     async def get_trading_pairs(self) -> List[str]:
