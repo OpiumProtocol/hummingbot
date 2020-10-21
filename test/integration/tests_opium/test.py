@@ -23,7 +23,7 @@ def test_get_last_traded_prices():
     return asyncio.run(order_book_api.get_last_traded_prices(['ETHUSDT', 'BNBUSDT']))
 
 
-def test_get_get_snapshot():
+def test_get_snapshot():
     """
     return: {'lastUpdateId': 3486706525, 'bids': [['380.48000000', '1.75000000'], ['380.47000000', '8.43429000'],
     ['380.46000000', '30.00000000'], ['380.45000000', '0.11201000'], ['380.44000000', '30.00000000'],
@@ -81,5 +81,5 @@ def test_listen_for(method: Callable):
 
 
 if __name__ == '__main__':
-    print(test_get_get_snapshot())
-    # print(test_listen_for(b.listen_for_order_book_snapshots))
+    # print(test_get_get_snapshot())
+    print(test_listen_for(order_book_api.listen_for_order_book_diffs))
