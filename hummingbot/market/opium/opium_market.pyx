@@ -10,7 +10,7 @@ from typing import (
 import asyncio
 
 from decimal import Decimal
-
+from opium_api import OpiumClient
 from hummingbot.core.network_iterator import NetworkStatus
 from hummingbot.core.data_type.order_book cimport OrderBook
 from hummingbot.core.data_type.order_book_tracker import OrderBookTrackerDataSourceType
@@ -22,6 +22,7 @@ from hummingbot.market.market_base import MarketBase
 # API_VERSION = 'v1'
 # API_HOST = 'api-test.opium.exchange'
 
+
 cdef class OpiumMarket(MarketBase):
     def __init__(self,
                  opium_api_key: str,
@@ -29,8 +30,7 @@ cdef class OpiumMarket(MarketBase):
                  ):
         super().__init__()
         # self._api_url: str = f'https://api-test.opium.exchange/v1'
-        # self._opium_client = OpiumClient(opium_api_key, opium_api_secret)
-        self._opium_client = ""
+        self._opium_client = OpiumClient(opium_api_key, opium_api_secret)
         # self._ev_loop = asyncio.get_event_loop()
 
     # TODO
@@ -74,9 +74,8 @@ cdef class OpiumMarket(MarketBase):
 
     # TODO
     @property
-    def opium_client(self) -> None:  # TODO: -> OpiumClient
-        # return self._opium_client
-        return None
+    def opium_client(self) -> OpiumClient:
+        return self._opium_client
 
     # TODO
     @property
@@ -123,8 +122,8 @@ cdef class OpiumMarket(MarketBase):
 
     # TODO
     def get_all_balances(self) -> Dict[str, float]:
-        print("getting all balances")
-        self._account_balances = {"ETH": 50.0, "USDT": 1000, "ETH-USDT": 500}
+        self._account_balances = self._opium_client.get_balance()
+        print(self._account_balances)
         return self._account_balances
 
     cdef object c_get_balance(self, str currency):
