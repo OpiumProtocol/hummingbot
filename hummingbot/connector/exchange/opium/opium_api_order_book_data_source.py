@@ -8,12 +8,9 @@ import asyncio
 import websockets
 
 from hummingbot.core.data_type.order_book import OrderBook
-from hummingbot.core.data_type.order_book_message import OrderBookMessage
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
 
 from hummingbot.logger import HummingbotLogger
-
-from hummingbot.market.binance.binance_order_book import BinanceOrderBook
 
 TRADING_PAIR_FILTER = re.compile(r"(BTC|ETH|USDT)$")
 
@@ -51,7 +48,6 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
         self._trading_pairs: Optional[List[str]] = trading_pairs
         self._order_book_create_function = lambda: OrderBook()
 
-
     @property
     def order_book_create_function(self) -> Callable[[], OrderBook]:
         return self._order_book_create_function
@@ -59,7 +55,6 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
     @order_book_create_function.setter
     def order_book_create_function(self, func: Callable[[], OrderBook]):
         self._order_book_create_function = func
-
 
     # TODO
     async def get_trading_pairs(self) -> List[str]:
@@ -85,6 +80,7 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
     async def listen_for_trades(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
         while True:
             try:
+                raise NotImplementedError
                 trading_pairs: List[str] = await self.get_trading_pairs()
                 ws_path: str = "/".join([f"{trading_pair.lower()}@trade" for trading_pair in trading_pairs])
                 stream_url: str = f"{DIFF_STREAM_URL}/{ws_path}"
@@ -93,9 +89,10 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
                     ws: websockets.WebSocketClientProtocol = ws
                     async for raw_msg in self._inner_messages(ws):
                         msg = ujson.loads(raw_msg)
-                        trade_msg: OrderBookMessage = BinanceOrderBook.trade_message_from_exchange(msg)
+                        # trade_msg: OrderBookMessage = BinanceOrderBook.trade_message_from_exchange(msg)
+                        # trade_msg = None
 
-                        output.put_nowait(trade_msg)
+                        output.put_nowait(msg)
             except asyncio.CancelledError:
                 raise
             except Exception:
