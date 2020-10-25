@@ -31,7 +31,7 @@ class OpiumAPIUserStreamDataSource(UserStreamTrackerDataSource):
         pass
 
     async def listen_for_user_stream(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
-
+        # TODO: parametrize it
         trading_pair = 'OEX-FUT-1DEC-135.00'
         token = '0x' + self._opium_client.generate_access_token()
         while True:
