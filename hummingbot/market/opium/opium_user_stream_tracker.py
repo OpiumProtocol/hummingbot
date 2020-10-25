@@ -5,6 +5,7 @@ import logging
 from typing import (
     Optional
 )
+from opium_api import OpiumClient
 from hummingbot.core.data_type.user_stream_tracker_data_source import UserStreamTrackerDataSource
 from hummingbot.logger import HummingbotLogger
 from hummingbot.core.data_type.user_stream_tracker import (
@@ -16,8 +17,6 @@ from hummingbot.core.utils.async_utils import (
     safe_gather,
 )
 from hummingbot.market.opium.opium_api_user_stream_data_source import OpiumAPIUserStreamDataSource
-
-OpiumClient = NotImplemented
 
 
 class OpiumUserStreamTracker(UserStreamTracker):
@@ -56,6 +55,3 @@ class OpiumUserStreamTracker(UserStreamTracker):
             self.data_source.listen_for_user_stream(self._ev_loop, self._user_stream)
         )
         await safe_gather(self._user_stream_tracking_task)
-
-    async def listen_for_user_stream(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
-        pass

@@ -57,3 +57,6 @@ def test_listen_for_user_stream_opium():
         print(pending)
 
     return asyncio.run(run())
+
+
+test_listen_for_user_stream_opium()
