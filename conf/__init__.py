@@ -109,6 +109,10 @@ coinalpha_order_book_api_password = "***REMOVED***"
 opium_api_key = os.getenv("NEW_MARKET_API_KEY")
 opium_secret_key = os.getenv("NEW_MARKET_SECRET_KEY")
 
+# TODO: Opium-verify
+opium_api_key = os.getenv("NEW_MARKET_API_KEY")
+opium_secret_key = os.getenv("NEW_MARKET_SECRET_KEY")
+
 kafka_2 = {
     "bootstrap_servers": "***REMOVED***",
     "zookeeper_servers": "***REMOVED***"
