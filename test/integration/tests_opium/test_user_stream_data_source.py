@@ -5,8 +5,8 @@ from asyncio import BaseEventLoop, FIRST_COMPLETED
 from binance.client import Client
 from opium_api import OpiumClient
 
-from hummingbot.market.binance.binance_api_user_stream_data_source import BinanceAPIUserStreamDataSource
-from hummingbot.market.opium.opium_api_user_stream_data_source import OpiumAPIUserStreamDataSource
+from hummingbot.connector.exchange.binance.binance_api_user_stream_data_source import BinanceAPIUserStreamDataSource
+from hummingbot.connector.exchange.opium.opium_api_user_stream_data_source import OpiumAPIUserStreamDataSource
 
 
 def test_listen_for_user_stream_binance():

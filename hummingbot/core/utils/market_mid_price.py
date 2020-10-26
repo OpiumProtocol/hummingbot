@@ -2,9 +2,9 @@ import requests
 from decimal import Decimal
 from typing import Optional
 import cachetools.func
-from hummingbot.market.binance.binance_market import BinanceMarket
-from hummingbot.market.kraken.kraken_market import KrakenMarket
 
+from hummingbot.connector.exchange.binance.binance_exchange import BinanceExchange
+from hummingbot.connector.exchange.kraken.kraken_exchange import KrakenExchange
 
 BINANCE_PRICE_URL = "https://api.binance.com/api/v3/ticker/bookTicker"
 KUCOIN_PRICE_URL = "https://api.kucoin.com/api/v1/market/allTickers"
@@ -39,7 +39,7 @@ def binance_mid_price(trading_pair: str) -> Optional[Decimal]:
     records = resp.json()
     result = None
     for record in records:
-        pair = BinanceMarket.convert_from_exchange_trading_pair(record["symbol"])
+        pair = BinanceExchange.convert_from_exchange_trading_pair(record["symbol"])
         if trading_pair == pair and record["bidPrice"] is not None and record["askPrice"] is not None:
             result = (Decimal(record["bidPrice"]) + Decimal(record["askPrice"])) / Decimal("2")
             break
@@ -87,7 +87,7 @@ def bittrex_mid_price(trading_pair: str) -> Optional[Decimal]:
 
 @cachetools.func.ttl_cache(ttl=10)
 def kraken_mid_price(trading_pair: str) -> Optional[Decimal]:
-    k_pair = KrakenMarket.convert_to_exchange_trading_pair(trading_pair)
+    k_pair = KrakenExchange.convert_to_exchange_trading_pair(trading_pair)
     resp = requests.get(url=KRAKEN_PRICE_URL + k_pair)
     resp_json = resp.json()
     if len(resp_json["error"]) == 0:

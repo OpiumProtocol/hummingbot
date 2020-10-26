@@ -11,21 +11,21 @@ from typing import (
     Optional
 )
 
+from hummingbot.connector.exchange.opium.opium_api_order_book_data_source import OpiumAPIOrderBookDataSource
 from hummingbot.logger import HummingbotLogger
 from hummingbot.core.data_type.order_book_tracker import OrderBookTracker
 from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.data_type.order_book_message import OrderBookMessage, OrderBookMessageType
-from hummingbot.market.opium.opium_api_order_book_data_source import OpiumAPIOrderBookDataSource
 
 
 class OpiumOrderBookTracker(OrderBookTracker):
-    bobt_logger: Optional[HummingbotLogger] = None
+    _logger: Optional[HummingbotLogger] = None
 
     @classmethod
     def logger(cls) -> HummingbotLogger:
-        if cls._bobt_logger is None:
-            cls._bobt_logger = logging.getLogger(__name__)
-        return cls._bobt_logger
+        if cls._logger is None:
+            cls._logger = logging.getLogger(__name__)
+        return cls._logger
 
     def __init__(self,
                  trading_pairs: Optional[List[str]] = None):

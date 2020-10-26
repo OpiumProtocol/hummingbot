@@ -12,12 +12,12 @@ from hummingbot.core.data_type.order_book import OrderBook
 from hummingbot.core.data_type.order_book_message import (
     OrderBookMessage, OrderBookMessageType
 )
-from hummingbot.market.opium.opium_order_book_message import OpiumOrderBookMessage
+from hummingbot.connector.exchange.opium.opium_order_book_message import OpiumOrderBookMessage
 
 _logger = None
 
 
-class OpiumComOrderBook(OrderBook):
+class OpiumOrderBook(OrderBook):
     @classmethod
     def logger(cls) -> HummingbotLogger:
         global _logger

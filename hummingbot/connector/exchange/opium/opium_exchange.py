@@ -47,10 +47,7 @@ s_decimal_NaN = Decimal("nan")
 
 
 class OpiumExchange(ExchangeBase):
-    """
-    CryptoComExchange connects with Crypto.com exchange and provides order book pricing, user account tracking and
-    trading functionality.
-    """
+
     API_CALL_TIMEOUT = 10.0
     SHORT_POLL_INTERVAL = 5.0
     UPDATE_ORDER_STATUS_MIN_INTERVAL = 10.0
@@ -64,14 +61,14 @@ class OpiumExchange(ExchangeBase):
         return ctce_logger
 
     def __init__(self,
-                 crypto_com_api_key: str,
-                 crypto_com_secret_key: str,
+                 opium_api_key: str,
+                 opium_api_secret: str,
                  trading_pairs: Optional[List[str]] = None,
                  trading_required: bool = True
                  ):
         """
-        :param crypto_com_api_key: The API key to connect to private Crypto.com APIs.
-        :param crypto_com_secret_key: The API secret.
+        :param opium_api_key: The API key to connect to private Crypto.com APIs.
+        :param opium_secret_key: The API secret.
         :param trading_pairs: The market trading pairs which to track order book data.
         :param trading_required: Whether actual trading is needed.
         """
@@ -79,7 +76,8 @@ class OpiumExchange(ExchangeBase):
         self._trading_required = trading_required
         # self._crypto_com_auth = CryptoComAuth(crypto_com_api_key, crypto_com_secret_key)
         self._order_book_tracker = OpiumOrderBookTracker(trading_pairs=trading_pairs)
-        self._user_stream_tracker = OpiumUserStreamTracker(self._crypto_com_auth, trading_pairs)
+        # self._user_stream_tracker = OpiumUserStreamTracker(self._crypto_com_auth, trading_pairs)
+        self._user_stream_tracker = OpiumUserStreamTracker()
         self._ev_loop = asyncio.get_event_loop()
         self._shared_client = None
         self._poll_notifier = asyncio.Event()
@@ -94,7 +92,7 @@ class OpiumExchange(ExchangeBase):
 
     @property
     def name(self) -> str:
-        return "crypto_com"
+        return "opium"
 
     @property
     def order_books(self) -> Dict[str, OrderBook]:
