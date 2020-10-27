@@ -125,8 +125,8 @@ def test_listen_for(method: Callable):
 
 
 if __name__ == '__main__':
-    # order_book_api = BinanceAPIOrderBookDataSource(['ETHUSDT'])
+    # order_book_api_ = BinanceAPIOrderBookDataSource(['ETHUSDT'])
     order_book_api_ = OpiumAPIOrderBookDataSource(['OEX-FUT-1DEC-135.00'])
 
     # print(test_fetch_trading_pairs_opium())
-    print(test_listen_for(order_book_api_.listen_for_trades))
+    print(test_listen_for(order_book_api_.listen_for_order_book_snapshots))

@@ -1,9 +1,8 @@
 import logging
-import re
 import time
 
 from typing import List, Optional, Dict, Any
-
+import pandas as pd
 import aiohttp
 import asyncio
 from opium_sockets import OpiumApi
@@ -15,13 +14,6 @@ from hummingbot.core.data_type.order_book_message import OrderBookMessage
 from hummingbot.core.data_type.order_book_tracker_data_source import OrderBookTrackerDataSource
 from hummingbot.core.utils.async_utils import safe_gather
 from hummingbot.logger import HummingbotLogger
-
-TRADING_PAIR_FILTER = re.compile(r"(BTC|ETH|USDT)$")
-
-SNAPSHOT_REST_URL = "TODO"
-DIFF_STREAM_URL = "TODO WSS"
-TICKER_PRICE_CHANGE_URL = "TODO"
-EXCHANGE_INFO_URL = "TODO"
 
 
 class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
@@ -84,12 +76,6 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
         return []
 
-    async def listen_for_order_book_diffs(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
-        pass
-
-    async def listen_for_order_book_snapshots(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
-        pass
-
     async def listen_for_trades(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
         """
         Listen for trades using websocket trade channel
@@ -110,6 +96,49 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
                                                                    trade_timestamp,
                                                                    metadata={"trading_pair": trading_pair})
                     output.put_nowait(trade_msg)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self.logger().error("Unexpected error.", exc_info=True)
+                await asyncio.sleep(5.0)
+
+    async def listen_for_order_book_diffs(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
+        pass
+
+    async def listen_for_order_book_snapshots(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
+        """
+        Listen for orderbook snapshots by fetching orderbook
+        """
+        while True:
+            try:
+                for trading_pair in self._trading_pairs:
+                    try:
+                        snapshot: Dict[str, any] = await self.get_order_book_data(trading_pair)
+                        print(f"snapshot: {snapshot}")
+                        snapshot_timestamp: float = time.time()
+                        snapshot_msg: OrderBookMessage = OpiumOrderBook.snapshot_message_from_exchange(
+                            snapshot,
+                            snapshot_timestamp,
+                            metadata={"trading_pair": trading_pair}
+                        )
+                        output.put_nowait(snapshot_msg)
+                        self.logger().debug(f"Saved order book snapshot for {trading_pair}")
+                        # Be careful not to go above API rate limits.
+                        await asyncio.sleep(5.0)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception:
+                        self.logger().network(
+                            "Unexpected error with WebSocket connection.",
+                            exc_info=True,
+                            app_warning_msg="Unexpected error with WebSocket connection. Retrying in 5 seconds. "
+                                            "Check network connection."
+                        )
+                        await asyncio.sleep(5.0)
+                this_hour: pd.Timestamp = pd.Timestamp.utcnow().replace(minute=0, second=0, microsecond=0)
+                next_hour: pd.Timestamp = this_hour + pd.Timedelta(hours=1)
+                delta: float = next_hour.timestamp() - time.time()
+                await asyncio.sleep(delta)
             except asyncio.CancelledError:
                 raise
             except Exception:
