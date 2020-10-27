@@ -105,9 +105,10 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
                     trade: Dict[Any] = trade
                     trade_timestamp: int = trade['timestamp']
-                    trade_msg: OrderBookMessage = OpiumOrderBook.trade_message_from_exchange(trade,
-                                                                                             trade_timestamp,
-                                                                                             metadata={"trading_pair": trading_pair})
+                    trade_msg: OrderBookMessage = \
+                        OpiumOrderBook.trade_message_from_exchange(trade,
+                                                                   trade_timestamp,
+                                                                   metadata={"trading_pair": trading_pair})
                     output.put_nowait(trade_msg)
             except asyncio.CancelledError:
                 raise
