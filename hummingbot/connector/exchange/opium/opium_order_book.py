@@ -103,18 +103,10 @@ class OpiumOrderBook(OrderBook):
         """
         Convert a trade data into standard OrderBookMessage format
         :param record: a trade data from the database
-        :return: CryptoComOrderBookMessage
+        :return: OpiumOrderBookMessage
         """
-
         if metadata:
             msg.update(metadata)
-
-        msg.update({
-            "exchange_order_id": msg.get("d"),
-            "trade_type": msg.get("s"),
-            "price": msg.get("p"),
-            "amount": msg.get("q"),
-        })
 
         return OpiumOrderBookMessage(
             message_type=OrderBookMessageType.TRADE,

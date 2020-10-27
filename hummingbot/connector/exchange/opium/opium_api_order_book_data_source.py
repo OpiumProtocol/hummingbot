@@ -5,9 +5,7 @@ import time
 from typing import List, Optional, Dict, Any
 
 import aiohttp
-import ujson
 import asyncio
-import websockets
 from opium_sockets import OpiumApi
 
 from hummingbot.connector.exchange.opium.opium_active_order_tracker import OpiumActiveOrderTracker
@@ -27,13 +25,13 @@ EXCHANGE_INFO_URL = "TODO"
 
 
 class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
-    _baobds_logger: Optional[HummingbotLogger] = None
+    _logger: Optional[HummingbotLogger] = None
 
     @classmethod
     def logger(cls) -> Optional[HummingbotLogger]:
-        if cls._baobds_logger is None:
-            cls._baobds_logger = logging.getLogger(__name__)
-        return cls._baobds_logger
+        if cls._logger is None:
+            cls._logger = logging.getLogger(__name__)
+        return cls._logger
 
     def __init__(self, trading_pairs: Optional[List[str]] = None):
         super().__init__(trading_pairs)
@@ -75,12 +73,6 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
         order_book.apply_snapshot(bids, asks, snapshot_msg.update_id)
         return order_book
 
-    async def listen_for_order_book_diffs(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
-        pass
-
-    async def listen_for_order_book_snapshots(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
-        pass
-
     @staticmethod
     async def fetch_trading_pairs() -> List[str]:
         try:
@@ -92,26 +84,33 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
         return []
 
-    # TODO
+    async def listen_for_order_book_diffs(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
+        pass
+
+    async def listen_for_order_book_snapshots(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
+        pass
+
     async def listen_for_trades(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
+        """
+        Listen for trades using websocket trade channel
+        """
+        opium_socketio: OpiumApi = OpiumApi(test_api=True)
+
+        trading_pair = 'OEX-FUT-1DEC-135.00'
         while True:
             try:
-                raise NotImplementedError
-                trading_pairs: List[str] = await self.get_trading_pairs()
-                ws_path: str = "/".join([f"{trading_pair.lower()}@trade" for trading_pair in trading_pairs])
-                stream_url: str = f"{DIFF_STREAM_URL}/{ws_path}"
+                async for trade in opium_socketio.listen_for_trades(trading_pair):
+                    if trade is None:
+                        continue
 
-                async with websockets.connect(stream_url) as ws:
-                    ws: websockets.WebSocketClientProtocol = ws
-                    async for raw_msg in self._inner_messages(ws):
-                        msg = ujson.loads(raw_msg)
-                        # trade_msg: OrderBookMessage = BinanceOrderBook.trade_message_from_exchange(msg)
-                        # trade_msg = None
-
-                        output.put_nowait(msg)
+                    trade: Dict[Any] = trade
+                    trade_timestamp: int = trade['timestamp']
+                    trade_msg: OrderBookMessage = OpiumOrderBook.trade_message_from_exchange(trade,
+                                                                                             trade_timestamp,
+                                                                                             metadata={"trading_pair": trading_pair})
+                    output.put_nowait(trade_msg)
             except asyncio.CancelledError:
                 raise
             except Exception:
-                self.logger().error("Unexpected error with WebSocket connection. Retrying after 30 seconds...",
-                                    exc_info=True)
-                await asyncio.sleep(30.0)
+                self.logger().error("Unexpected error.", exc_info=True)
+                await asyncio.sleep(5.0)

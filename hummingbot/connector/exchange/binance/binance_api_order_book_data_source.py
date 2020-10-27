@@ -163,6 +163,8 @@ class BinanceAPIOrderBookDataSource(OrderBookTrackerDataSource):
                     ws: websockets.WebSocketClientProtocol = ws
                     async for raw_msg in self._inner_messages(ws):
                         msg = ujson.loads(raw_msg)
+                        print(f"msg: {msg}")
+
                         trade_msg: OrderBookMessage = BinanceOrderBook.trade_message_from_exchange(msg)
                         output.put_nowait(trade_msg)
             except asyncio.CancelledError:

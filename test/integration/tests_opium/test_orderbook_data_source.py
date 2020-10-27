@@ -60,7 +60,7 @@ def test_fetch_trading_pairs_opium() -> List[str]:
     return asyncio.run(order_book_api.fetch_trading_pairs())
 
 
-def test_get_snapshot():
+def test_get_snapshot_binance():
     """
     return: {'lastUpdateId': 3486706525, 'bids': [['380.48000000', '1.75000000'], ['380.47000000', '8.43429000'],
     ['380.46000000', '30.00000000'], ['380.45000000', '0.11201000'], ['380.44000000', '30.00000000'],
@@ -95,6 +95,10 @@ def test_get_new_order_book():
 def test_listen_for(method: Callable):
     """
     method: b.listen_for_trades / b.listen_for_order_book_diffs / b.listen_for_order_book_snapshots
+
+    listen_for_trades returns:
+    OrderBookMessage(type=<OrderBookMessageType.TRADE: 3>, content={'trading_pair': 'ETH-USDT', 'trade_type': 1.0, 'trade_id': 199324566, 'update_id': 1603786371199, 'price': '393.55000000', 'amount': '0.87674000'}, timestamp=1603786371.1990001)
+
     """
 
     async def read_from_queue(queue):
@@ -121,5 +125,8 @@ def test_listen_for(method: Callable):
 
 
 if __name__ == '__main__':
-    print(test_fetch_trading_pairs_opium())
-    # print(test_listen_for(order_book_api.listen_for_order_book_diffs))
+    # order_book_api = BinanceAPIOrderBookDataSource(['ETHUSDT'])
+    order_book_api_ = OpiumAPIOrderBookDataSource(['OEX-FUT-1DEC-135.00'])
+
+    # print(test_fetch_trading_pairs_opium())
+    print(test_listen_for(order_book_api_.listen_for_trades))
