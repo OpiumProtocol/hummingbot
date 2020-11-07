@@ -25,7 +25,7 @@ class OpiumAPIUserStreamDataSource(UserStreamTrackerDataSource):
 
     @property
     def last_recv_time(self) -> float:
-        return self._opium_socketio.get_last_message_time()
+        return int(self._opium_socketio.get_last_message_time())
 
     async def get_listen_key(self):
         pass
@@ -36,11 +36,11 @@ class OpiumAPIUserStreamDataSource(UserStreamTrackerDataSource):
         token = '0x' + self._opium_client.generate_access_token()
         while True:
             try:
-                await self._opium_socketio.listen_for_orders(trading_pair=trading_pair,
-                                                             maker_addr=self._opium_client.get_public_key(),
-                                                             sig=token,
-                                                             output=output)
-
+                async for msg in self._opium_socketio.listen_for_account_trades_orders(trading_pair=trading_pair,
+                                                                                       maker_addr=self._opium_client.get_public_key(),
+                                                                                       sig=token):
+                    if msg['result']:
+                        await output.put(msg)
             except Exception as ex:
                 self.logger().error(f"{ex} error while maintaining the user event listen key. Retrying after "
                                     "5 seconds...", exc_info=True)

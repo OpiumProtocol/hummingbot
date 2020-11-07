@@ -88,6 +88,7 @@ class OrderBookTracker(ABC):
         self._init_order_books_task = safe_ensure_future(
             self._init_order_books()
         )
+
         self._emit_trade_event_task = safe_ensure_future(
             self._emit_trade_event_loop()
         )

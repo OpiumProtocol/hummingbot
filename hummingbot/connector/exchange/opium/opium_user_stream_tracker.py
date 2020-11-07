@@ -27,8 +27,7 @@ class OpiumUserStreamTracker(UserStreamTracker):
             cls._bust_logger = logging.getLogger(__name__)
         return cls._bust_logger
 
-    def __init__(self,
-                 opium_client: Optional[OpiumClient] = None):
+    def __init__(self, opium_client: Optional[OpiumClient]):
         super().__init__()
         self._opium_client: OpiumClient = opium_client
         self._ev_loop: asyncio.events.AbstractEventLoop = asyncio.get_event_loop()

@@ -53,18 +53,14 @@ class OpiumOrderBookMessage(OrderBookMessage):
 
     @property
     def asks(self) -> List[OrderBookRow]:
-        asks = map(self.content["asks"], lambda ask: {"price": ask[0], "amount": ask[1]})
-
         return [
-            OrderBookRow(float(price), float(amount), self.update_id) for price, amount in asks
+            OrderBookRow(float(price), float(amount), self.update_id) for price, amount in self.content["asks"]
         ]
 
     @property
     def bids(self) -> List[OrderBookRow]:
-        bids = map(self.content["bids"], lambda bid: {"price": bid[0], "amount": bid[1]})
-
         return [
-            OrderBookRow(float(price), float(amount), self.update_id) for price, amount in bids
+            OrderBookRow(float(price), float(amount), self.update_id) for price, amount in self.content["bids"]
         ]
 
     def __eq__(self, other) -> bool:

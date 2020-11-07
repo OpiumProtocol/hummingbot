@@ -8,13 +8,13 @@ from typing import (
 )
 from decimal import Decimal
 import asyncio
-import json
 import aiohttp
 import math
 import time
 from async_timeout import timeout
+from opium_api import OpiumClient
+from opium_sockets import OpiumApi
 
-from hummingbot.connector.exchange.liquid.constants import Constants
 from hummingbot.connector.exchange.opium import opium_utils
 from hummingbot.connector.exchange.opium.opium_in_flight_order import OpiumInFlightOrder
 from hummingbot.connector.exchange.opium.opium_order_book_tracker import OpiumOrderBookTracker
@@ -47,7 +47,6 @@ s_decimal_NaN = Decimal("nan")
 
 
 class OpiumExchange(ExchangeBase):
-
     API_CALL_TIMEOUT = 10.0
     SHORT_POLL_INTERVAL = 5.0
     UPDATE_ORDER_STATUS_MIN_INTERVAL = 10.0
@@ -77,7 +76,8 @@ class OpiumExchange(ExchangeBase):
         # self._crypto_com_auth = CryptoComAuth(crypto_com_api_key, crypto_com_secret_key)
         self._order_book_tracker = OpiumOrderBookTracker(trading_pairs=trading_pairs)
         # self._user_stream_tracker = OpiumUserStreamTracker(self._crypto_com_auth, trading_pairs)
-        self._user_stream_tracker = OpiumUserStreamTracker()
+        self._opium_client = OpiumClient(opium_api_key, opium_api_secret)
+        self._user_stream_tracker = OpiumUserStreamTracker(self._opium_client)
         self._ev_loop = asyncio.get_event_loop()
         self._shared_client = None
         self._poll_notifier = asyncio.Event()
@@ -89,6 +89,7 @@ class OpiumExchange(ExchangeBase):
         self._user_stream_event_listener_task = None
         self._trading_rules_polling_task = None
         self._last_poll_timestamp = 0
+        self.ids = {}
 
     @property
     def name(self) -> str:
@@ -184,6 +185,7 @@ class OpiumExchange(ExchangeBase):
         self._order_book_tracker.start()
         self._trading_rules_polling_task = safe_ensure_future(self._trading_rules_polling_loop())
         if self._trading_required:
+            print('start')
             self._status_polling_task = safe_ensure_future(self._status_polling_loop())
             self._user_stream_tracker_task = safe_ensure_future(self._user_stream_tracker.start())
             self._user_stream_event_listener_task = safe_ensure_future(self._user_stream_event_listener())
@@ -216,7 +218,7 @@ class OpiumExchange(ExchangeBase):
         """
         try:
             # since there is no ping endpoint, the lowest rate call is to get BTC-USDT ticker
-            await self._api_request("get", "public/get-ticker?instrument_name=BTC_USDT")
+            await self._api_request("get", "tickers")
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -249,9 +251,27 @@ class OpiumExchange(ExchangeBase):
                 await asyncio.sleep(0.5)
 
     async def _update_trading_rules(self):
-        instruments_info = await self._api_request("get", path_url="public/get-instruments")
+        # instruments_info = await self._api_request("get", path_url="public/get-instruments")
+        instruments_info = {
+            "id": 11,
+            "method": "public/get-instruments",
+            "code": 0,
+            "result": {
+                "instruments": [
+                    {
+                        "instrument_name": "OEX-FUT-1DEC-135.00",
+                        "quote_currency": "DAI",
+                        "base_currency": "FUT",
+                        "price_decimals": 2,
+                        "quantity_decimals": 2
+                    }
+                ]
+            }
+        }
+
         self._trading_rules.clear()
         self._trading_rules = self._format_trading_rules(instruments_info)
+        print(f"self._trading_rules: {self._trading_rules}")
 
     def _format_trading_rules(self, instruments_info: Dict[str, Any]) -> Dict[str, TradingRule]:
         """
@@ -286,8 +306,7 @@ class OpiumExchange(ExchangeBase):
         result = {}
         for rule in instruments_info["result"]["instruments"]:
             try:
-                trading_pair = NotImplementedError
-                # trading_pair = crypto_com_utils.convert_from_exchange_trading_pair(rule["instrument_name"])
+                trading_pair = opium_utils.convert_from_exchange_trading_pair(rule["instrument_name"])
                 price_decimals = Decimal(str(rule["price_decimals"]))
                 quantity_decimals = Decimal(str(rule["quantity_decimals"]))
                 # E.g. a price decimal of 2 means 0.01 incremental.
@@ -295,53 +314,12 @@ class OpiumExchange(ExchangeBase):
                 quantity_step = Decimal("1") / Decimal(str(math.pow(10, quantity_decimals)))
                 result[trading_pair] = TradingRule(trading_pair,
                                                    min_price_increment=price_step,
-                                                   min_base_amount_increment=quantity_step)
+                                                   min_base_amount_increment=quantity_step,
+                                                   supports_market_orders=False)
             except Exception:
                 self.logger().error(f"Error parsing the trading pair rule {rule}. Skipping.", exc_info=True)
         return result
 
-    async def _api_request(self,
-                           method: str,
-                           path_url: str,
-                           params: Dict[str, Any] = {},
-                           is_auth_required: bool = False) -> Dict[str, Any]:
-        """
-        Sends an aiohttp request and waits for a response.
-        :param method: The HTTP method, e.g. get or post
-        :param path_url: The path url or the API end point
-        :param is_auth_required: Whether an authentication is required, when True the function will add encrypted
-        signature to the request.
-        :returns A response in json format.
-        """
-        url = f"{Constants.REST_URL}/{path_url}"
-        client = await self._http_client()
-        if is_auth_required:
-            request_id = opium_utils.RequestId.generate_request_id()
-            data = {"params": params}
-            params = self._crypto_com_auth.generate_auth_dict(path_url, request_id,
-                                                              opium_utils.get_ms_timestamp(), data)
-            headers = self._crypto_com_auth.get_headers()
-        else:
-            headers = {"Content-Type": "application/json"}
-
-        if method == "get":
-            response = await client.get(url, headers=headers)
-        elif method == "post":
-            post_json = json.dumps(params)
-            response = await client.post(url, data=post_json, headers=headers)
-        else:
-            raise NotImplementedError
-
-        try:
-            parsed_response = json.loads(await response.text())
-        except Exception as e:
-            raise IOError(f"Error parsing data from {url}. Error: {str(e)}")
-        if response.status != 200:
-            raise IOError(f"Error fetching data from {url}. HTTP status is {response.status}. "
-                          f"Message: {parsed_response}")
-        # print(f"REQUEST: {method} {path_url} {params}")
-        # print(f"RESPONSE: {parsed_response}")
-        return parsed_response
 
     def get_order_price_quantum(self, trading_pair: str, price: Decimal):
         """
@@ -373,6 +351,9 @@ class OpiumExchange(ExchangeBase):
         :param price: The price (note: this is no longer optional)
         :returns A new internal order id
         """
+        if order_type is OrderType.MARKET:
+            raise NotImplementedError('Opium market orders is not supported')
+
         order_id: str = opium_utils.get_new_client_order_id(True, trading_pair)
         safe_ensure_future(self._create_order(TradeType.BUY, order_id, trading_pair, amount, order_type, price))
         return order_id
@@ -388,6 +369,9 @@ class OpiumExchange(ExchangeBase):
         :param price: The price (note: this is no longer optional)
         :returns A new internal order id
         """
+        if order_type is OrderType.MARKET:
+            raise NotImplementedError('Opium market orders is not supported')
+
         order_id: str = opium_utils.get_new_client_order_id(False, trading_pair)
         safe_ensure_future(self._create_order(TradeType.SELL, order_id, trading_pair, amount, order_type, price))
         return order_id
@@ -401,6 +385,7 @@ class OpiumExchange(ExchangeBase):
         """
         safe_ensure_future(self._execute_cancel(trading_pair, order_id))
         return order_id
+
 
     async def _create_order(self,
                             trade_type: TradeType,
@@ -418,6 +403,7 @@ class OpiumExchange(ExchangeBase):
         :param order_type: The order type
         :param price: The order price
         """
+
         if not order_type.is_limit_type():
             raise Exception(f"Unsupported order type: {order_type}")
         trading_rule = self._trading_rules[trading_pair]
@@ -427,15 +413,15 @@ class OpiumExchange(ExchangeBase):
         if amount < trading_rule.min_order_size:
             raise ValueError(f"Buy order amount {amount} is lower than the minimum order size "
                              f"{trading_rule.min_order_size}.")
-        api_params = {"instrument_name": opium_utils.convert_to_exchange_trading_pair(trading_pair),
+        api_params = {"instrument_name": trading_pair,
                       "side": trade_type.name,
-                      "type": "LIMIT",
                       "price": f"{price:f}",
-                      "quantity": f"{amount:f}",
-                      "client_oid": order_id
+                      "quantity": f"{amount:f}"
+                      # "client_oid": order_id
                       }
-        if order_type is OrderType.LIMIT_MAKER:
-            api_params["exec_inst"] = "POST_ONLY"
+
+
+
         self.start_tracking_order(order_id,
                                   None,
                                   trading_pair,
@@ -445,14 +431,19 @@ class OpiumExchange(ExchangeBase):
                                   order_type
                                   )
         try:
-            order_result = await self._api_request("post", "private/create-order", api_params, True)
-            exchange_order_id = str(order_result["result"]["order_id"])
+            order_result = await asyncio.get_event_loop().run_in_executor(None,
+                                                                          lambda: self._opium_client.create_order(
+                                                                              **api_params))
+
+            print(f"api_params: {api_params}")
+            exchange_order_id = order_result[0]["id"]
             tracked_order = self._in_flight_orders.get(order_id)
+            self.ids[exchange_order_id] = order_id
             if tracked_order is not None:
                 self.logger().info(f"Created {order_type.name} {trade_type.name} order {order_id} for "
                                    f"{amount} {trading_pair}.")
                 tracked_order.exchange_order_id = exchange_order_id
-
+                print(f"tracked_order: {tracked_order}")
             event_tag = MarketEvent.BuyOrderCreated if trade_type is TradeType.BUY else MarketEvent.SellOrderCreated
             event_class = BuyOrderCreatedEvent if trade_type is TradeType.BUY else SellOrderCreatedEvent
             self.trigger_event(event_tag,
@@ -467,6 +458,7 @@ class OpiumExchange(ExchangeBase):
         except asyncio.CancelledError:
             raise
         except Exception as e:
+            print(f"e: {e}")
             self.stop_tracking_order(order_id)
             self.logger().network(
                 f"Error submitting {trade_type.name} {order_type.name} order to Crypto.com for "
@@ -517,18 +509,18 @@ class OpiumExchange(ExchangeBase):
         """
         try:
             tracked_order = self._in_flight_orders.get(order_id)
+            print(f"tracked_order: {tracked_order}")
             if tracked_order is None:
                 raise ValueError(f"Failed to cancel order - {order_id}. Order not found.")
             if tracked_order.exchange_order_id is None:
                 await tracked_order.get_exchange_order_id()
             ex_order_id = tracked_order.exchange_order_id
-            result = await self._api_request(
-                "post",
-                "private/cancel-order",
-                {"instrument_name": opium_utils.convert_to_exchange_trading_pair(trading_pair),
-                 "order_id": ex_order_id},
-                True
-            )
+            print(f"ex_order_id: {ex_order_id}")
+            result = await asyncio.get_event_loop().run_in_executor(None,
+                                                                    lambda: self._opium_client.cancel_order(
+                                                                        [ex_order_id]))
+
+            print(f"cancel_result: {result}")
             if result["code"] == 0:
                 if wait_for_status:
                     from hummingbot.core.utils.async_utils import wait_til
@@ -572,9 +564,31 @@ class OpiumExchange(ExchangeBase):
         """
         Calls REST API to update total and available balances.
         """
+        print('_update_balances')
         local_asset_names = set(self._account_balances.keys())
         remote_asset_names = set()
-        account_info = await self._api_request("post", "private/get-account-summary", {}, True)
+
+        # TODO: implement balance
+        account_info = {
+            "id": 11,
+            "method": "private/get-account-summary",
+            "code": 0,
+            "result": {
+                "accounts": [
+                    {
+                        "balance": 99999999.905000000000000000,
+                        "available": 99999996.905000000000000000,
+                        "order": 3.000000000000000000,
+                        "stake": 0,
+                        "currency": "OEX-FUT-1DEC-135.00"
+                    }
+                ]
+            }
+        }
+
+
+
+        # account_info = await self._api_request("post", "private/get-account-summary", {}, True)
         for account in account_info["result"]["accounts"]:
             asset_name = account["currency"]
             self._account_available_balances[asset_name] = Decimal(str(account["available"]))
@@ -593,18 +607,58 @@ class OpiumExchange(ExchangeBase):
         last_tick = self._last_poll_timestamp / self.UPDATE_ORDER_STATUS_MIN_INTERVAL
         current_tick = self.current_timestamp / self.UPDATE_ORDER_STATUS_MIN_INTERVAL
 
+        print(f'_update_order_status....{current_tick} {last_tick} {len(self._in_flight_orders)}')
+
         if current_tick > last_tick and len(self._in_flight_orders) > 0:
             tracked_orders = list(self._in_flight_orders.values())
+            print(f"tracked_orders: {tracked_orders}")
             tasks = []
+
+            order_ids = []
             for tracked_order in tracked_orders:
                 order_id = await tracked_order.get_exchange_order_id()
-                tasks.append(self._api_request("post",
-                                               "private/get-order-detail",
-                                               {"order_id": order_id},
-                                               True))
+                order_ids.append(order_id)
+
+            # TODO: get results
+            trading_pair = 'OEX-FUT-1DEC-135.00'
+            token = '0x' + self._opium_client.generate_access_token()
+
+
+            api = OpiumApi(test_api=True)
+            orders = await api.get_account_orders(trading_pair, self._opium_client.get_public_key(), token)
+            trades = await api.get_account_trades(trading_pair, self._opium_client.get_public_key(), token)
+
+            print(f"orders: {orders}")
+            print(f"trades: {trades}")
+
+
+
+
+            # tasks.append(self._api_request("post",
+            #                                "private/get-order-detail",
+            #                                {"order_id": order_id},
+            #                                True))
+
             self.logger().debug(f"Polling for order status updates of {len(tasks)} orders.")
             update_results = await safe_gather(*tasks, return_exceptions=True)
             for update_result in update_results:
+                """
+                    "result": {
+                        "trade_list": [
+                          {
+                            "side": "BUY",
+                            "instrument_name": "ETH_CRO",
+                            "fee": 0.007,
+                            "trade_id": "371303044218155296",
+                            "create_time": 1588902493045,
+                            "traded_price": 7,
+                            "traded_quantity": 7,
+                            "fee_currency": "CRO",
+                            "order_id": "371302913889488619"
+                          }
+                
+                """
+
                 if isinstance(update_result, Exception):
                     raise update_result
                 if "result" not in update_result:
@@ -619,10 +673,15 @@ class OpiumExchange(ExchangeBase):
         Updates in-flight order and triggers cancellation or failure event if needed.
         :param order_msg: The order response from either REST or web socket API (they are of the same format)
         """
-        client_order_id = order_msg["client_oid"]
+        client_order_id = self.ids.get(order_msg["order_id"])
+
+
+        print(f"client_order_id not in self._in_flight_orders: {client_order_id not in self._in_flight_orders}")
+        print(self._in_flight_orders)
         if client_order_id not in self._in_flight_orders:
             return
         tracked_order = self._in_flight_orders[client_order_id]
+        print(f"tracked_order: {tracked_order}")
         # Update order execution status
         tracked_order.last_state = order_msg["status"]
         if tracked_order.is_cancelled:
@@ -646,8 +705,8 @@ class OpiumExchange(ExchangeBase):
 
     async def _process_trade_message(self, trade_msg: Dict[str, Any]):
         """
-        Updates in-flight order and trigger order filled event for trade message received. Triggers order completed
-        event if the total executed amount equals to the specified order amount.
+        Updates in-flight order and trigger order filled event for trade message received. Triggers order
+        a completed event if the total executed amount equals to the specified order amount.
         """
         for order in self._in_flight_orders.values():
             await order.get_exchange_order_id()
@@ -695,6 +754,8 @@ class OpiumExchange(ExchangeBase):
             self.stop_tracking_order(tracked_order.client_order_id)
 
     async def cancel_all(self, timeout_seconds: float):
+        # TODO: test_cancell_all
+
         """
         Cancels all in-flight orders and waits for cancellation results.
         Used by bot's top level stop and exit commands (cancelling outstanding orders on exit)
@@ -728,6 +789,7 @@ class OpiumExchange(ExchangeBase):
         Is called automatically by the clock for each clock's tick (1 second by default).
         It checks if status polling task is due for execution.
         """
+        print(f"tick: {timestamp}")
         now = time.time()
         poll_interval = (self.SHORT_POLL_INTERVAL
                          if now - self._user_stream_tracker.last_recv_time > 60.0
@@ -771,20 +833,83 @@ class OpiumExchange(ExchangeBase):
     async def _user_stream_event_listener(self):
         """
         Listens to message in _user_stream_tracker.user_stream queue. The messages are put in by
-        CryptoComAPIUserStreamDataSource.
+        OpiumAPIUserStreamDataSource.
+        {"result": {
+            "subscription": "user.balance",
+            "channel": "user.balance",
+            "data": [
+                {
+                    "currency": "CRO",
+                    "balance": 99999999947.99626,
+                    "available": 99999988201.50826,
+                    "order": 11746.488,
+                    "stake": 0
+                }
+            ],
+            "channel": "user.balance"
+        }
+
+         "result": {
+            "instrument_name": "ETH_CRO",
+            "subscription": "user.trade.ETH_CRO",
+            "channel": "user.trade",
+            "data": [
+             {
+              "side": "SELL",
+              "instrument_name": "ETH_CRO",
+              "fee": 0.014,
+              "trade_id": "367107655537806900",
+              "create_time": "1588777459755",
+              "traded_price": 7,
+              "traded_quantity": 1,
+              "fee_currency": "CRO",
+              "order_id": "367107623521528450"
+            }
+            ],
+            "channel": "user.trade.ETH_CRO"
+            }
+
+         "result": {
+            "instrument_name": "ETH_CRO",
+            "subscription": "user.order.ETH_CRO",
+            "channel": "user.order",
+            "data": [
+              {
+                "status": "ACTIVE",
+                "side": "BUY",
+                "price": 1,
+                "quantity": 1,
+                "order_id": "366455245775097673",
+                "client_oid": "my_order_0002",
+                "create_time": 1588758017375,
+                "update_time": 1588758017411,
+                "type": "LIMIT",
+                "instrument_name": "ETH_CRO",
+                "cumulative_quantity": 0,
+                "cumulative_value": 0,
+                "avg_price": 0,
+                "fee_currency": "CRO",
+                "time_in_force":"GOOD_TILL_CANCEL"
+              }
+            ],
+            "channel": "user.order.ETH_CRO"
+        }
+
         """
+
         async for event_message in self._iter_user_event_queue():
+            print(f"event_message: {event_message}")
             try:
                 if "result" not in event_message or "channel" not in event_message["result"]:
                     continue
                 channel = event_message["result"]["channel"]
-                if "user.trade" in channel:
+                if "trades:ticker:address" in channel:
                     for trade_msg in event_message["result"]["data"]:
                         await self._process_trade_message(trade_msg)
-                elif "user.order" in channel:
+                elif "orderbook:orders:makerAddress:updates" in channel:
                     for order_msg in event_message["result"]["data"]:
                         self._process_order_message(order_msg)
-                elif channel == "user.balance":
+                elif channel == "positions:address":
                     balances = event_message["result"]["data"]
                     for balance_entry in balances:
                         asset_name = balance_entry["currency"]

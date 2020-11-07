@@ -16,6 +16,10 @@ from hummingbot.core.utils.async_utils import safe_gather
 from hummingbot.logger import HummingbotLogger
 
 
+# TODO the pair is hardcoded
+TRADING_PAIR = 'OEX-FUT-1DEC-135.00'
+
+
 class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
     _logger: Optional[HummingbotLogger] = None
 
@@ -67,6 +71,7 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
     @staticmethod
     async def fetch_trading_pairs() -> List[str]:
+        # TODO: use OpiumClient here
         try:
             async with aiohttp.ClientSession() as client:
                 async with client.get('https://api-test.opium.exchange/v1/tickers?expired=false') as resp:
@@ -82,20 +87,20 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
         """
         opium_socketio: OpiumApi = OpiumApi(test_api=True)
 
-        trading_pair = 'OEX-FUT-1DEC-135.00'
         while True:
             try:
-                async for trade in opium_socketio.listen_for_trades(trading_pair):
-                    if trade is None:
-                        continue
+                async for trades in opium_socketio.listen_for_trades(TRADING_PAIR, new_only=True):
+                    for trade in trades:
+                        if trade is None:
+                            continue
 
-                    trade: Dict[Any] = trade
-                    trade_timestamp: int = trade['timestamp']
-                    trade_msg: OrderBookMessage = \
-                        OpiumOrderBook.trade_message_from_exchange(trade,
-                                                                   trade_timestamp,
-                                                                   metadata={"trading_pair": trading_pair})
-                    output.put_nowait(trade_msg)
+                        trade: Dict[Any] = trade
+                        trade_timestamp: int = trade['timestamp']
+                        trade_msg: OrderBookMessage = \
+                            OpiumOrderBook.trade_message_from_exchange(trade,
+                                                                       trade_timestamp,
+                                                                       metadata={"trading_pair": TRADING_PAIR})
+                        output.put_nowait(trade_msg)
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -103,7 +108,43 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
                 await asyncio.sleep(5.0)
 
     async def listen_for_order_book_diffs(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
-        pass
+        """
+        Listen for orderbook diffs using websocket book channel
+        """
+
+        opium_socketio: OpiumApi = OpiumApi(test_api=True)
+
+
+
+        while True:
+            try:
+                async for order_book_data in opium_socketio.listen_for_order_book_diffs(TRADING_PAIR):
+                    if order_book_data is None:
+                        continue
+
+                    timestamp: float = time.time()
+
+                    # data in this channel is not order book diff but the entire order book (up to depth 150).
+                    # so we need to convert it into a order book snapshot.
+                    # Opium does not offer order book diff ws updates.
+                    orderbook_msg: OrderBookMessage = OpiumOrderBook.snapshot_message_from_exchange(
+                        order_book_data,
+                        timestamp,
+                        metadata={"trading_pair": TRADING_PAIR}
+                    )
+                    output.put_nowait(orderbook_msg)
+
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self.logger().network(
+                    "Unexpected error with WebSocket connection.",
+                    exc_info=True,
+                    app_warning_msg="Unexpected error with WebSocket connection. Retrying in 30 seconds. "
+                                    "Check network connection."
+                )
+                await asyncio.sleep(30.0)
+
 
     async def listen_for_order_book_snapshots(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
         """

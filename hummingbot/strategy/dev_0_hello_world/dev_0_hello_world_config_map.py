@@ -28,8 +28,10 @@ dev_0_hello_world_config_map = {
         ConfigVar(key="market",
                   prompt="Enter the name of the exchange >>> ",
                   validator=validate_exchange,
-                  on_validated=lambda value: required_exchanges.append(value)),
+                  on_validated=lambda value: required_exchanges.append(value),
+                  default='opium'),
     "asset_trading_pair":
         ConfigVar(key="asset_trading_pair",
-                  prompt=trading_pair_prompt),
+                  prompt=trading_pair_prompt,
+                  default='OEX-FUT-1DEC-135.00'),
 }
