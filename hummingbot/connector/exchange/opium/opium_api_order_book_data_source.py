@@ -36,12 +36,14 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
     @classmethod
     async def get_last_traded_prices(cls, trading_pairs: List[str]) -> Dict[str, float]:
+        print('get_last_traded_prices')
         tasks = [cls.get_last_traded_price(t_pair) for t_pair in trading_pairs]
         results = await safe_gather(*tasks)
         return {t_pair: result for t_pair, result in zip(trading_pairs, results)}
 
     @classmethod
     async def get_last_traded_price(cls, trading_pair: str) -> float:
+        print('get_last_traded_price')
         oa = OpiumApi(test_api=True)
         r = await oa.get_latest_price(trading_pair)
         return float(r[trading_pair])
@@ -51,9 +53,7 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
         """
         Get whole orderbook
         """
-        oa = OpiumApi(test_api=True)
-
-        return await oa.get_new_order_book(trading_pair)
+        return await OpiumApi(test_api=True).get_new_order_book(trading_pair)
 
     async def get_new_order_book(self, trading_pair: str) -> OrderBook:
         snapshot: Dict[str, Any] = await self.get_order_book_data(trading_pair)
@@ -114,8 +114,6 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
         opium_socketio: OpiumApi = OpiumApi(test_api=True)
 
-
-
         while True:
             try:
                 async for order_book_data in opium_socketio.listen_for_order_book_diffs(TRADING_PAIR):
@@ -144,7 +142,6 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
                                     "Check network connection."
                 )
                 await asyncio.sleep(30.0)
-
 
     async def listen_for_order_book_snapshots(self, ev_loop: asyncio.BaseEventLoop, output: asyncio.Queue):
         """

@@ -1,3 +1,4 @@
+import inspect
 import logging
 from typing import (
     Dict,
@@ -61,7 +62,7 @@ class OpiumExchange(ExchangeBase):
 
     def __init__(self,
                  opium_api_key: str,
-                 opium_api_secret: str,
+                 opium_secret_key: str,
                  trading_pairs: Optional[List[str]] = None,
                  trading_required: bool = True
                  ):
@@ -71,12 +72,25 @@ class OpiumExchange(ExchangeBase):
         :param trading_pairs: The market trading pairs which to track order book data.
         :param trading_required: Whether actual trading is needed.
         """
+        print(f"trading_pairs: {trading_pairs}")
         super().__init__()
+
+        self._opium_client = OpiumClient(opium_api_key, opium_secret_key)
+
+        trading_pairs = [] if trading_pairs is None else trading_pairs
+
+        self.hbot_pairs = trading_pairs
+        self.exchange_pairs = {t: t for t in trading_pairs}
+        print(f"trading_pairs1: {trading_pairs}")
+
+        if trading_pairs:
+            self.exchange_pairs = {p: self._opium_client.hb_ticker_to_opium_ticker(p) for p in self.hbot_pairs}
+            print(f"self.hbot_pairs: {self.hbot_pairs}")
+            print(f"self.exchange_pairs: {self.exchange_pairs}")
         self._trading_required = trading_required
         # self._crypto_com_auth = CryptoComAuth(crypto_com_api_key, crypto_com_secret_key)
-        self._order_book_tracker = OpiumOrderBookTracker(trading_pairs=trading_pairs)
+        self._order_book_tracker = OpiumOrderBookTracker(trading_pairs=list(self.exchange_pairs.values()))
         # self._user_stream_tracker = OpiumUserStreamTracker(self._crypto_com_auth, trading_pairs)
-        self._opium_client = OpiumClient(opium_api_key, opium_api_secret)
         self._user_stream_tracker = OpiumUserStreamTracker(self._opium_client)
         self._ev_loop = asyncio.get_event_loop()
         self._shared_client = None
@@ -218,7 +232,9 @@ class OpiumExchange(ExchangeBase):
         """
         try:
             # since there is no ping endpoint, the lowest rate call is to get BTC-USDT ticker
-            await self._api_request("get", "tickers")
+            # TODO: add check network
+            pass
+            # await self._api_request("get", "tickers")
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -259,9 +275,16 @@ class OpiumExchange(ExchangeBase):
             "result": {
                 "instruments": [
                     {
+                        "instrument_name": "OEX_FUT_1DEC_135.00-DAI",
+                        "quote_currency": "DAI",
+                        "base_currency": "OEX-FUT-1DEC-135.00",
+                        "price_decimals": 2,
+                        "quantity_decimals": 2
+                    },
+                    {
                         "instrument_name": "OEX-FUT-1DEC-135.00",
                         "quote_currency": "DAI",
-                        "base_currency": "FUT",
+                        "base_currency": "OEX-FUT-1DEC-135.00",
                         "price_decimals": 2,
                         "quantity_decimals": 2
                     }
@@ -306,7 +329,11 @@ class OpiumExchange(ExchangeBase):
         result = {}
         for rule in instruments_info["result"]["instruments"]:
             try:
-                trading_pair = opium_utils.convert_from_exchange_trading_pair(rule["instrument_name"])
+                trading_pair = rule["instrument_name"]
+                print('instruments')
+                print(f"trading_pair: {trading_pair}")
+
+
                 price_decimals = Decimal(str(rule["price_decimals"]))
                 quantity_decimals = Decimal(str(rule["quantity_decimals"]))
                 # E.g. a price decimal of 2 means 0.01 incremental.
@@ -319,7 +346,6 @@ class OpiumExchange(ExchangeBase):
             except Exception:
                 self.logger().error(f"Error parsing the trading pair rule {rule}. Skipping.", exc_info=True)
         return result
-
 
     def get_order_price_quantum(self, trading_pair: str, price: Decimal):
         """
@@ -336,6 +362,7 @@ class OpiumExchange(ExchangeBase):
         return Decimal(trading_rule.min_base_amount_increment)
 
     def get_order_book(self, trading_pair: str) -> OrderBook:
+        trading_pair = self.exchange_pairs[trading_pair]
         if trading_pair not in self._order_book_tracker.order_books:
             raise ValueError(f"No order book exists for '{trading_pair}'.")
         return self._order_book_tracker.order_books[trading_pair]
@@ -351,6 +378,9 @@ class OpiumExchange(ExchangeBase):
         :param price: The price (note: this is no longer optional)
         :returns A new internal order id
         """
+        trading_pair = self.exchange_pairs[trading_pair]
+        print(f"buy trading_pair: {trading_pair}")
+
         if order_type is OrderType.MARKET:
             raise NotImplementedError('Opium market orders is not supported')
 
@@ -369,6 +399,8 @@ class OpiumExchange(ExchangeBase):
         :param price: The price (note: this is no longer optional)
         :returns A new internal order id
         """
+        trading_pair = self.exchange_pairs[trading_pair]
+
         if order_type is OrderType.MARKET:
             raise NotImplementedError('Opium market orders is not supported')
 
@@ -383,9 +415,10 @@ class OpiumExchange(ExchangeBase):
         :param trading_pair: The market (e.g. BTC-USDT) of the order.
         :param order_id: The internal order id (also called client_order_id)
         """
+        trading_pair = self.exchange_pairs[trading_pair]
+
         safe_ensure_future(self._execute_cancel(trading_pair, order_id))
         return order_id
-
 
     async def _create_order(self,
                             trade_type: TradeType,
@@ -407,9 +440,10 @@ class OpiumExchange(ExchangeBase):
         if not order_type.is_limit_type():
             raise Exception(f"Unsupported order type: {order_type}")
         trading_rule = self._trading_rules[trading_pair]
-
         amount = self.quantize_order_amount(trading_pair, amount)
+        print(f"trading_rule: {trading_rule}")
         price = self.quantize_order_price(trading_pair, price)
+        print(f"price: {price}")
         if amount < trading_rule.min_order_size:
             raise ValueError(f"Buy order amount {amount} is lower than the minimum order size "
                              f"{trading_rule.min_order_size}.")
@@ -419,9 +453,6 @@ class OpiumExchange(ExchangeBase):
                       "quantity": f"{amount:f}"
                       # "client_oid": order_id
                       }
-
-
-
         self.start_tracking_order(order_id,
                                   None,
                                   trading_pair,
@@ -430,12 +461,14 @@ class OpiumExchange(ExchangeBase):
                                   amount,
                                   order_type
                                   )
+
+        print(api_params)
         try:
             order_result = await asyncio.get_event_loop().run_in_executor(None,
                                                                           lambda: self._opium_client.create_order(
                                                                               **api_params))
 
-            print(f"api_params: {api_params}")
+            print(f"order_result: {order_result}")
             exchange_order_id = order_result[0]["id"]
             tracked_order = self._in_flight_orders.get(order_id)
             self.ids[exchange_order_id] = order_id
@@ -481,6 +514,7 @@ class OpiumExchange(ExchangeBase):
         """
         Starts tracking an order by simply adding it into _in_flight_orders dictionary.
         """
+
         self._in_flight_orders[order_id] = OpiumInFlightOrder(
             client_order_id=order_id,
             exchange_order_id=exchange_order_id,
@@ -564,7 +598,6 @@ class OpiumExchange(ExchangeBase):
         """
         Calls REST API to update total and available balances.
         """
-        print('_update_balances')
         local_asset_names = set(self._account_balances.keys())
         remote_asset_names = set()
 
@@ -576,17 +609,35 @@ class OpiumExchange(ExchangeBase):
             "result": {
                 "accounts": [
                     {
-                        "balance": 99999999.905000000000000000,
-                        "available": 99999996.905000000000000000,
-                        "order": 3.000000000000000000,
+                        "balance": 9999.0,
+                        "available": 9999.0,
+                        "order": 3.00,
                         "stake": 0,
-                        "currency": "OEX-FUT-1DEC-135.00"
+                        "currency": "OEX_FUT_1DEC_135.00"
+                    },
+                    {
+                        "balance": 9999.0,
+                        "available": 9999.0,
+                        "order": 3.00,
+                        "stake": 0,
+                        "currency": "DAI"
+                    },
+                    {
+                        "balance": 50.0,
+                        "available": 50.0,
+                        "order": 0.00,
+                        "stake": 0,
+                        "currency": "USDT"
+                    }, {
+                        "balance": 5.0,
+                        "available": 5.0,
+                        "order": 0.00,
+                        "stake": 0,
+                        "currency": "ETH"
                     }
                 ]
             }
         }
-
-
 
         # account_info = await self._api_request("post", "private/get-account-summary", {}, True)
         for account in account_info["result"]["accounts"]:
@@ -623,16 +674,12 @@ class OpiumExchange(ExchangeBase):
             trading_pair = 'OEX-FUT-1DEC-135.00'
             token = '0x' + self._opium_client.generate_access_token()
 
-
             api = OpiumApi(test_api=True)
             orders = await api.get_account_orders(trading_pair, self._opium_client.get_public_key(), token)
             trades = await api.get_account_trades(trading_pair, self._opium_client.get_public_key(), token)
 
             print(f"orders: {orders}")
             print(f"trades: {trades}")
-
-
-
 
             # tasks.append(self._api_request("post",
             #                                "private/get-order-detail",
@@ -674,7 +721,6 @@ class OpiumExchange(ExchangeBase):
         :param order_msg: The order response from either REST or web socket API (they are of the same format)
         """
         client_order_id = self.ids.get(order_msg["order_id"])
-
 
         print(f"client_order_id not in self._in_flight_orders: {client_order_id not in self._in_flight_orders}")
         print(self._in_flight_orders)

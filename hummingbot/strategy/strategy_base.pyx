@@ -196,6 +196,7 @@ cdef class StrategyBase(TimeIterator):
             self.logger().error("Error formatting wallet balance stats.", exc_info=True)
 
     def balance_warning(self, market_trading_pair_tuples: List[MarketTradingPairTuple]) -> List[str]:
+        print(f"market_trading_pair_tuples: {market_trading_pair_tuples}")
         cdef:
             double base_balance
             double quote_balance

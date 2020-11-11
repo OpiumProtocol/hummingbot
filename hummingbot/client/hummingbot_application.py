@@ -200,6 +200,8 @@ class HummingbotApplication(*commands):
         )
 
     def _initialize_markets(self, market_names: List[Tuple[str, List[str]]]):
+
+        print(f"market_names: {market_names}")
         ethereum_rpc_url = global_config_map.get("ethereum_rpc_url").value
 
         # aggregate trading_pairs if there are duplicate markets
@@ -223,7 +225,10 @@ class HummingbotApplication(*commands):
             elif connector_name in CEXES or connector_name in DERIVATIVES:
                 keys = dict((key, value.value) for key, value in dict(filter(lambda item: connector_name in item[0], global_config_map.items())).items())
                 connector_class = get_connector_class(connector_name)
+                print(f"connector: {connector_class}")
+                print(f"trading_pairs: {trading_pairs}")
                 connector = connector_class(**keys, trading_pairs=trading_pairs, trading_required=self._trading_required)
+
 
             elif connector_name in DEXES:
                 assert self.wallet is not None

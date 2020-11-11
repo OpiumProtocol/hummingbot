@@ -42,10 +42,12 @@ cdef class ExchangeBase(ConnectorBase):
 
     @staticmethod
     def convert_from_exchange_trading_pair(exchange_trading_pair: str) -> Optional[str]:
+        print(f"exchange_trading_pair: {exchange_trading_pair}")
         return exchange_trading_pair
 
     @staticmethod
     def convert_to_exchange_trading_pair(hb_trading_pair: str) -> str:
+        print(f"hb_trading_pair: {hb_trading_pair}")
         return hb_trading_pair
 
     @property

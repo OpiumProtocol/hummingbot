@@ -20,6 +20,14 @@ def start(self):
             self._notify(str(e))
             return
 
+        market = 'opium'
+
+        trading_pair = 'OEXFUT1DEC135.00-DAI'
+        print('start')
+        print(f"market: {market}")
+        print(f"asset_trading_pair: {asset_trading_pair}")
+        print(f"trading_pair: {trading_pair}")
+
         market_names: List[Tuple[str, List[str]]] = [(market, [trading_pair])]
 
         self._initialize_wallet(token_trading_pairs=list(set(assets)))

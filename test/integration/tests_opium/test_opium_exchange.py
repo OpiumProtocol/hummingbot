@@ -6,36 +6,29 @@ from hummingbot.connector.exchange.binance.binance_exchange import BinanceExchan
 # from hummingbot.connector.exchange.opium.opium_exchange import OpiumExchange
 from hummingbot.connector.exchange.opium.opium_exchange import OpiumExchange
 from hummingbot.core.event.events import OrderType
-
-
-def test_binance_run():
-    async def run():
-        ex = BinanceExchange(binance_api_key=os.getenv('binance_test_key'),
-                             binance_api_secret=os.getenv('binance_test_secret'),
-                             trading_pairs=['ETHUSDT'])
-
-        print(ex.name)
-        print(ex.order_books)
-        print(ex.get_balance('BNB'))
-        await ex.start_network()
-        await asyncio.sleep(10)
-        print(ex.status_dict)
-
-    asyncio.run(run())
-
-
 import datetime as dt
 
 
-class OpiumExchangeTest:
 
+
+
+
+
+
+
+
+
+
+
+
+class OpiumExchangeTest:
 
     @classmethod
     def test_opium_run(cls):
         async def run():
             ex = OpiumExchange(opium_api_key=os.getenv('opium_test_key'),
-                               opium_api_secret=os.getenv('opium_test_secret'),
-                               trading_pairs=['OEX-FUT-1DEC-135.00'])
+                               opium_secret_key=os.getenv('opium_test_secret'),
+                               trading_pairs=['OEX_FUT_1DEC_135.00-DAI'])
             print(ex.name)
             print(ex.order_books)
             print(ex.get_balance('DAI'))
@@ -51,7 +44,7 @@ class OpiumExchangeTest:
             await asyncio.sleep(10)
             print(ex.status_dict)
 
-            trading_pair = 'OEX-FUT-1DEC-135.00'
+            trading_pair = 'OEX_FUT_1DEC_135.00-DAI'
             print(ex.tick((dt.datetime.now() - dt.timedelta(days=-5)).timestamp()))
 
             r = ex.buy(trading_pair=trading_pair,
@@ -60,7 +53,6 @@ class OpiumExchangeTest:
                        price=Decimal('14.5')
                        )
             print(f"r: {r}")
-
 
 
             print(ex.tick((dt.datetime.now() - dt.timedelta(days=-5)).timestamp()))
@@ -77,6 +69,29 @@ class OpiumExchangeTest:
 
             await asyncio.sleep(10000)
             await ex.stop_network()
+
+        asyncio.run(run())
+
+    @staticmethod
+    def test_buy():
+
+        async def run():
+            ex = OpiumExchange(opium_api_key=os.getenv('opium_test_key'),
+                               opium_secret_key=os.getenv('opium_test_secret'),
+                               trading_pairs=['OEX_FUT_1DEC_135.00-DAI'])
+            await ex.start_network()
+            await asyncio.sleep(5)
+
+
+            trading_pair = 'OEX_FUT_1DEC_135.00-DAI'
+
+            r = ex.buy(trading_pair=trading_pair,
+                       amount=Decimal('1'),
+                       order_type=OrderType.LIMIT,
+                       price=Decimal('14.5'))
+            await asyncio.sleep(5)
+
+            print(f"r: {r}")
 
         asyncio.run(run())
 

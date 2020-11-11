@@ -142,6 +142,7 @@ def main():
     if args.config_password is None and len(os.environ.get("CONFIG_PASSWORD", "")) > 0:
         args.config_password = os.environ["CONFIG_PASSWORD"]
 
+
     # If no password is given from the command line, prompt for one.
     if args.config_password is None:
         if not login_prompt():

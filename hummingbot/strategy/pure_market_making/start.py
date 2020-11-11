@@ -1,3 +1,4 @@
+import inspect
 from typing import (
     List,
     Tuple,
@@ -68,6 +69,7 @@ def start(self):
         take_if_crossed = c_map.get("take_if_crossed").value
 
         strategy_logging_options = PureMarketMakingStrategy.OPTION_LOG_ALL
+
 
         self.strategy = PureMarketMakingStrategy(
             market_info=MarketTradingPairTuple(*maker_data),
