@@ -96,7 +96,11 @@ class OpiumExchangeUnitTest(unittest.TestCase):
         price = self.connector.quantize_order_price(self.trading_pair, price)
         amount = self.connector.quantize_order_amount(self.trading_pair, Decimal("1"))
         quote_bal = self.connector.get_available_balance(self.quote_token)
+        print(f"price: {price}")
+        print(f"amount: {amount}")
+        print(f"quote_bal: {quote_bal}")
         base_bal = self.connector.get_available_balance(self.base_token)
+        print(f"base_bal: {base_bal}")
 
         order_id = self._place_order(True, amount, OrderType.LIMIT, price)
         order_completed_event = self.ev_loop.run_until_complete(self.event_logger.wait_for(BuyOrderCompletedEvent))
@@ -104,10 +108,15 @@ class OpiumExchangeUnitTest(unittest.TestCase):
         trade_events = [t for t in self.event_logger.event_log if isinstance(t, OrderFilledEvent)]
         base_amount_traded = sum(t.amount for t in trade_events)
         quote_amount_traded = sum(t.amount * t.price for t in trade_events)
+        print(f"base_amount_traded: {base_amount_traded}")
+        print(f"quote_amount_traded: {quote_amount_traded}")
 
         self.assertTrue([evt.order_type == OrderType.LIMIT for evt in trade_events])
         self.assertEqual(order_id, order_completed_event.order_id)
         self.assertEqual(amount, order_completed_event.base_asset_amount)
+        print(f"order_completed_event.base_asset: {order_completed_event.base_asset}")
+        print(f"order_completed_event.quote_asset: {order_completed_event.quote_asset}")
+        # TODO: returns: OEX, FUT
         # self.assertEqual("OEX_FUT_1DEC_135.00", order_completed_event.base_asset)
         # self.assertEqual("DAI", order_completed_event.quote_asset)
         self.assertAlmostEqual(base_amount_traded, order_completed_event.base_asset_amount)
@@ -148,4 +157,6 @@ class OpiumExchangeUnitTest(unittest.TestCase):
         # check available base balance gets updated, we need to wait a bit for the balance message to arrive
         expected_base_bal = base_bal
         self.ev_loop.run_until_complete(asyncio.sleep(1))
-        self.assertAlmostEqual(expected_base_bal, self.connector.get_available_balance(self.base_token), 5)
+        bl =self.connector.get_available_balance(self.base_token)
+        print(f"bl: {bl}")
+        self.assertAlmostEqual(expected_base_bal,bl , 5)

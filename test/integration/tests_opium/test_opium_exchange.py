@@ -9,18 +9,6 @@ from hummingbot.core.event.events import OrderType
 import datetime as dt
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 class OpiumExchangeTest:
 
     @classmethod
@@ -75,15 +63,15 @@ class OpiumExchangeTest:
     @staticmethod
     def test_buy():
 
+        trading_pair = 'OEX_FUT_1DEC_135.00-DAI'
+
         async def run():
             ex = OpiumExchange(opium_api_key=os.getenv('opium_test_key'),
                                opium_secret_key=os.getenv('opium_test_secret'),
-                               trading_pairs=['OEX_FUT_1DEC_135.00-DAI'])
+                               trading_pairs=[trading_pair])
             await ex.start_network()
             await asyncio.sleep(5)
 
-
-            trading_pair = 'OEX_FUT_1DEC_135.00-DAI'
 
             r = ex.buy(trading_pair=trading_pair,
                        amount=Decimal('1'),
@@ -94,6 +82,66 @@ class OpiumExchangeTest:
             print(f"r: {r}")
 
         asyncio.run(run())
+
+    @staticmethod
+    def test_update_balances():
+
+        trading_pair = 'OEX_FUT_1DEC_135.00-DAI'
+
+        base_asset, quote_asset = trading_pair.split('-')
+
+        async def run():
+            ex = OpiumExchange(opium_api_key=os.getenv('opium_test_key'),
+                               opium_secret_key=os.getenv('opium_test_secret'),
+                               trading_pairs=[trading_pair])
+            await ex.start_network()
+            await asyncio.sleep(5)
+
+
+
+            balance = await ex.get_available_balance('DAI')
+            await asyncio.sleep(5)
+
+            print(f"balance: {balance}")
+
+        asyncio.run(run())
+
+    def test_update_order_status(self):
+        trading_pair = 'OEX_FUT_1DEC_135.00-DAI'
+
+        base_asset, quote_asset = trading_pair.split('-')
+
+        async def run():
+            ex = OpiumExchange(opium_api_key=os.getenv('opium_test_key'),
+                               opium_secret_key=os.getenv('opium_test_secret'),
+                               trading_pairs=[trading_pair])
+            await ex.start_network()
+            await asyncio.sleep(5)
+
+            # test buy
+            print(ex.tick((dt.datetime.now() - dt.timedelta(days=-5)).timestamp()))
+
+            r = ex.buy(trading_pair=trading_pair,
+                       amount=Decimal('1'),
+                       order_type=OrderType.LIMIT,
+                       price=Decimal('14.5')
+                       )
+            print(f"r: {r}")
+            await asyncio.sleep(5)
+
+            print(ex.tick((dt.datetime.now() - dt.timedelta(days=-5)).timestamp()))
+
+            await asyncio.sleep(10)
+
+            order_status = await ex._update_order_status()
+            await asyncio.sleep(5)
+
+            print(f"order_status: {order_status}")
+
+        asyncio.run(run())
+
+
+
 
 
 if __name__ == '__main__':

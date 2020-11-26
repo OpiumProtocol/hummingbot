@@ -13,7 +13,7 @@ import aiohttp
 import math
 import time
 from async_timeout import timeout
-from opium_api import OpiumClient
+from opium_api import OpiumClient, AsyncOpiumClient
 from opium_sockets import OpiumApi
 
 from hummingbot.connector.exchange.opium import opium_utils
@@ -72,21 +72,19 @@ class OpiumExchange(ExchangeBase):
         :param trading_pairs: The market trading pairs which to track order book data.
         :param trading_required: Whether actual trading is needed.
         """
-        print(f"trading_pairs: {trading_pairs}")
         super().__init__()
 
         self._opium_client = OpiumClient(opium_api_key, opium_secret_key)
+        self._async_client = AsyncOpiumClient(opium_api_key, opium_secret_key)
+
 
         trading_pairs = [] if trading_pairs is None else trading_pairs
 
         self.hbot_pairs = trading_pairs
         self.exchange_pairs = {t: t for t in trading_pairs}
-        print(f"trading_pairs1: {trading_pairs}")
 
         if trading_pairs:
             self.exchange_pairs = {p: self._opium_client.hb_ticker_to_opium_ticker(p) for p in self.hbot_pairs}
-            print(f"self.hbot_pairs: {self.hbot_pairs}")
-            print(f"self.exchange_pairs: {self.exchange_pairs}")
         self._trading_required = trading_required
         # self._crypto_com_auth = CryptoComAuth(crypto_com_api_key, crypto_com_secret_key)
         self._order_book_tracker = OpiumOrderBookTracker(trading_pairs=list(self.exchange_pairs.values()))
@@ -104,6 +102,10 @@ class OpiumExchange(ExchangeBase):
         self._trading_rules_polling_task = None
         self._last_poll_timestamp = 0
         self.ids = {}
+        self._async_client_init()
+
+    def _async_client_init(self):
+        self._ev_loop.create_task(self._async_client.init())
 
     @property
     def name(self) -> str:
@@ -126,6 +128,7 @@ class OpiumExchange(ExchangeBase):
         """
         A dictionary of statuses of various connector's components.
         """
+
         return {
             "order_books_initialized": self._order_book_tracker.ready,
             "account_balance": len(self._account_balances) > 0 if self._trading_required else True,
@@ -199,7 +202,6 @@ class OpiumExchange(ExchangeBase):
         self._order_book_tracker.start()
         self._trading_rules_polling_task = safe_ensure_future(self._trading_rules_polling_loop())
         if self._trading_required:
-            print('start')
             self._status_polling_task = safe_ensure_future(self._status_polling_loop())
             self._user_stream_tracker_task = safe_ensure_future(self._user_stream_tracker.start())
             self._user_stream_event_listener_task = safe_ensure_future(self._user_stream_event_listener())
@@ -231,10 +233,7 @@ class OpiumExchange(ExchangeBase):
         the network connection. Simply ping the network (or call any light weight public API).
         """
         try:
-            # since there is no ping endpoint, the lowest rate call is to get BTC-USDT ticker
-            # TODO: add check network
-            pass
-            # await self._api_request("get", "tickers")
+            await self._async_client.check_network()
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -294,7 +293,6 @@ class OpiumExchange(ExchangeBase):
 
         self._trading_rules.clear()
         self._trading_rules = self._format_trading_rules(instruments_info)
-        print(f"self._trading_rules: {self._trading_rules}")
 
     def _format_trading_rules(self, instruments_info: Dict[str, Any]) -> Dict[str, TradingRule]:
         """
@@ -332,7 +330,6 @@ class OpiumExchange(ExchangeBase):
                 trading_pair = rule["instrument_name"]
                 print('instruments')
                 print(f"trading_pair: {trading_pair}")
-
 
                 price_decimals = Decimal(str(rule["price_decimals"]))
                 quantity_decimals = Decimal(str(rule["quantity_decimals"]))
@@ -379,7 +376,6 @@ class OpiumExchange(ExchangeBase):
         :returns A new internal order id
         """
         trading_pair = self.exchange_pairs[trading_pair]
-        print(f"buy trading_pair: {trading_pair}")
 
         if order_type is OrderType.MARKET:
             raise NotImplementedError('Opium market orders is not supported')
@@ -441,9 +437,7 @@ class OpiumExchange(ExchangeBase):
             raise Exception(f"Unsupported order type: {order_type}")
         trading_rule = self._trading_rules[trading_pair]
         amount = self.quantize_order_amount(trading_pair, amount)
-        print(f"trading_rule: {trading_rule}")
         price = self.quantize_order_price(trading_pair, price)
-        print(f"price: {price}")
         if amount < trading_rule.min_order_size:
             raise ValueError(f"Buy order amount {amount} is lower than the minimum order size "
                              f"{trading_rule.min_order_size}.")
@@ -462,19 +456,14 @@ class OpiumExchange(ExchangeBase):
                                   order_type
                                   )
 
-        print(api_params)
         try:
-            order_result = await asyncio.get_event_loop().run_in_executor(None,
-                                                                          lambda: self._opium_client.create_order(
-                                                                              **api_params))
-
+            order_result = await self._async_client.create_order(**api_params)
             print(f"order_result: {order_result}")
             exchange_order_id = order_result[0]["id"]
             tracked_order = self._in_flight_orders.get(order_id)
             self.ids[exchange_order_id] = order_id
             if tracked_order is not None:
-                self.logger().info(f"Created {order_type.name} {trade_type.name} order {order_id} for "
-                                   f"{amount} {trading_pair}.")
+                self.logger().info(f"Created {order_type.name} {trade_type.name} order {order_id} for {amount} {trading_pair}.")
                 tracked_order.exchange_order_id = exchange_order_id
                 print(f"tracked_order: {tracked_order}")
             event_tag = MarketEvent.BuyOrderCreated if trade_type is TradeType.BUY else MarketEvent.SellOrderCreated
@@ -494,7 +483,7 @@ class OpiumExchange(ExchangeBase):
             print(f"e: {e}")
             self.stop_tracking_order(order_id)
             self.logger().network(
-                f"Error submitting {trade_type.name} {order_type.name} order to Crypto.com for "
+                f"Error submitting {trade_type.name} {order_type.name} order to Opium for "
                 f"{amount} {trading_pair} "
                 f"{price}.",
                 exc_info=True,
@@ -550,9 +539,7 @@ class OpiumExchange(ExchangeBase):
                 await tracked_order.get_exchange_order_id()
             ex_order_id = tracked_order.exchange_order_id
             print(f"ex_order_id: {ex_order_id}")
-            result = await asyncio.get_event_loop().run_in_executor(None,
-                                                                    lambda: self._opium_client.cancel_order(
-                                                                        [ex_order_id]))
+            result = await self._async_client.cancel_order(ex_order_id)
 
             print(f"cancel_result: {result}")
             if result["code"] == 0:
@@ -566,7 +553,7 @@ class OpiumExchange(ExchangeBase):
             self.logger().network(
                 f"Failed to cancel order {order_id}: {str(e)}",
                 exc_info=True,
-                app_warning_msg=f"Failed to cancel the order {order_id} on CryptoCom. "
+                app_warning_msg=f"Failed to cancel the order {order_id} on Opium. "
                                 f"Check API key and network connection."
             )
 
@@ -597,50 +584,26 @@ class OpiumExchange(ExchangeBase):
     async def _update_balances(self):
         """
         Calls REST API to update total and available balances.
+        account_info = {
+                        "accounts": [
+                            {
+                                "balance": 777.0,
+                                "available": 777.0,
+                                "order": 3.00,
+                                "stake": 0,
+                                "currency": "DAI"
+                            }
+                        ]
+                }
         """
         local_asset_names = set(self._account_balances.keys())
         remote_asset_names = set()
 
-        # TODO: implement balance
-        account_info = {
-            "id": 11,
-            "method": "private/get-account-summary",
-            "code": 0,
-            "result": {
-                "accounts": [
-                    {
-                        "balance": 9999.0,
-                        "available": 9999.0,
-                        "order": 3.00,
-                        "stake": 0,
-                        "currency": "OEX_FUT_1DEC_135.00"
-                    },
-                    {
-                        "balance": 9999.0,
-                        "available": 9999.0,
-                        "order": 3.00,
-                        "stake": 0,
-                        "currency": "DAI"
-                    },
-                    {
-                        "balance": 50.0,
-                        "available": 50.0,
-                        "order": 0.00,
-                        "stake": 0,
-                        "currency": "USDT"
-                    }, {
-                        "balance": 5.0,
-                        "available": 5.0,
-                        "order": 0.00,
-                        "stake": 0,
-                        "currency": "ETH"
-                    }
-                ]
-            }
-        }
-
+        account_info = await self._async_client.get_balance()
+        print(f"account_info: {account_info}")
+        # account_info = await asyncio.get_event_loop().run_in_executor(None, lambda: self._opium_client.get_balance())
         # account_info = await self._api_request("post", "private/get-account-summary", {}, True)
-        for account in account_info["result"]["accounts"]:
+        for account in account_info["accounts"]:
             asset_name = account["currency"]
             self._account_available_balances[asset_name] = Decimal(str(account["available"]))
             self._account_balances[asset_name] = Decimal(str(account["balance"]))
@@ -660,7 +623,8 @@ class OpiumExchange(ExchangeBase):
 
         print(f'_update_order_status....{current_tick} {last_tick} {len(self._in_flight_orders)}')
 
-        if current_tick > last_tick and len(self._in_flight_orders) > 0:
+        # current_tick > last_tick and
+        if len(self._in_flight_orders) > 0:
             tracked_orders = list(self._in_flight_orders.values())
             print(f"tracked_orders: {tracked_orders}")
             tasks = []
@@ -669,6 +633,8 @@ class OpiumExchange(ExchangeBase):
             for tracked_order in tracked_orders:
                 order_id = await tracked_order.get_exchange_order_id()
                 order_ids.append(order_id)
+
+            print(f"order_ids: {order_ids}")
 
             # TODO: get results
             trading_pair = 'OEX-FUT-1DEC-135.00'
@@ -688,6 +654,9 @@ class OpiumExchange(ExchangeBase):
 
             self.logger().debug(f"Polling for order status updates of {len(tasks)} orders.")
             update_results = await safe_gather(*tasks, return_exceptions=True)
+
+            print(f"update_results: {update_results}")
+
             for update_result in update_results:
                 """
                     "result": {
@@ -722,12 +691,9 @@ class OpiumExchange(ExchangeBase):
         """
         client_order_id = self.ids.get(order_msg["order_id"])
 
-        print(f"client_order_id not in self._in_flight_orders: {client_order_id not in self._in_flight_orders}")
-        print(self._in_flight_orders)
         if client_order_id not in self._in_flight_orders:
             return
         tracked_order = self._in_flight_orders[client_order_id]
-        print(f"tracked_order: {tracked_order}")
         # Update order execution status
         tracked_order.last_state = order_msg["status"]
         if tracked_order.is_cancelled:
@@ -800,7 +766,7 @@ class OpiumExchange(ExchangeBase):
             self.stop_tracking_order(tracked_order.client_order_id)
 
     async def cancel_all(self, timeout_seconds: float):
-        # TODO: test_cancell_all
+        # TODO: test_cancel_all
 
         """
         Cancels all in-flight orders and waits for cancellation results.
@@ -808,7 +774,9 @@ class OpiumExchange(ExchangeBase):
         :param timeout_seconds: The timeout at which the operation will be canceled.
         :returns List of CancellationResult which indicates whether each order is successfully cancelled.
         """
+        print(self._in_flight_orders.values())
         incomplete_orders = [o for o in self._in_flight_orders.values() if not o.is_done]
+        print(f"incomplete_orders: {incomplete_orders}")
         tasks = [self._execute_cancel(o.trading_pair, o.client_order_id, True) for o in incomplete_orders]
         order_id_set = set([o.client_order_id for o in incomplete_orders])
         successful_cancellations = []
@@ -835,7 +803,6 @@ class OpiumExchange(ExchangeBase):
         Is called automatically by the clock for each clock's tick (1 second by default).
         It checks if status polling task is due for execution.
         """
-        print(f"tick: {timestamp}")
         now = time.time()
         poll_interval = (self.SHORT_POLL_INTERVAL
                          if now - self._user_stream_tracker.last_recv_time > 60.0
@@ -872,7 +839,7 @@ class OpiumExchange(ExchangeBase):
                 self.logger().network(
                     "Unknown error. Retrying after 1 seconds.",
                     exc_info=True,
-                    app_warning_msg="Could not fetch user events from CryptoCom. Check API key and network connection."
+                    app_warning_msg="Could not fetch user events from Opium. Check API key and network connection."
                 )
                 await asyncio.sleep(1.0)
 
