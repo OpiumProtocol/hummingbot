@@ -16,10 +16,6 @@ from hummingbot.core.utils.async_utils import safe_gather
 from hummingbot.logger import HummingbotLogger
 
 
-# TODO the pair is hardcoded
-TRADING_PAIR = 'OEX-FUT-1DEC-135.00'
-
-
 class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
     _logger: Optional[HummingbotLogger] = None
 
@@ -32,18 +28,19 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
     def __init__(self, trading_pairs: Optional[List[str]] = None):
         super().__init__(trading_pairs)
         self._trading_pairs: Optional[List[str]] = trading_pairs
+        if len(self._trading_pairs) > 0:
+            self.trading_pair = self._trading_pairs[0]
+
         self._order_book_create_function = lambda: OrderBook()
 
     @classmethod
     async def get_last_traded_prices(cls, trading_pairs: List[str]) -> Dict[str, float]:
-        print('get_last_traded_prices')
         tasks = [cls.get_last_traded_price(t_pair) for t_pair in trading_pairs]
         results = await safe_gather(*tasks)
         return {t_pair: result for t_pair, result in zip(trading_pairs, results)}
 
     @classmethod
     async def get_last_traded_price(cls, trading_pair: str) -> float:
-        print('get_last_traded_price')
         oa = OpiumApi(test_api=True)
         r = await oa.get_latest_price(trading_pair)
         return float(r[trading_pair])
@@ -89,7 +86,7 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
         while True:
             try:
-                async for trades in opium_socketio.listen_for_trades(TRADING_PAIR, new_only=True):
+                async for trades in opium_socketio.listen_for_trades(self.trading_pair, new_only=True):
                     for trade in trades:
                         if trade is None:
                             continue
@@ -99,7 +96,7 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
                         trade_msg: OrderBookMessage = \
                             OpiumOrderBook.trade_message_from_exchange(trade,
                                                                        trade_timestamp,
-                                                                       metadata={"trading_pair": TRADING_PAIR})
+                                                                       metadata={"trading_pair": self.trading_pair})
                         output.put_nowait(trade_msg)
             except asyncio.CancelledError:
                 raise
@@ -116,7 +113,7 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
 
         while True:
             try:
-                async for order_book_data in opium_socketio.listen_for_order_book_diffs(TRADING_PAIR):
+                async for order_book_data in opium_socketio.listen_for_order_book_diffs(self.trading_pair):
                     if order_book_data is None:
                         continue
 
@@ -128,7 +125,7 @@ class OpiumAPIOrderBookDataSource(OrderBookTrackerDataSource):
                     orderbook_msg: OrderBookMessage = OpiumOrderBook.snapshot_message_from_exchange(
                         order_book_data,
                         timestamp,
-                        metadata={"trading_pair": TRADING_PAIR}
+                        metadata={"trading_pair": self.trading_pair}
                     )
                     output.put_nowait(orderbook_msg)
 

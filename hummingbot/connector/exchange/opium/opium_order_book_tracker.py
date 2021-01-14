@@ -33,7 +33,6 @@ class OpiumOrderBookTracker(OrderBookTracker):
             data_source=OpiumAPIOrderBookDataSource(trading_pairs=trading_pairs),
             trading_pairs=trading_pairs
         )
-        print(f"trading_pairs: {trading_pairs}")
         self._order_book_diff_stream: asyncio.Queue = asyncio.Queue()
         self._order_book_snapshot_stream: asyncio.Queue = asyncio.Queue()
         self._ev_loop: asyncio.BaseEventLoop = asyncio.get_event_loop()

@@ -28,10 +28,9 @@ class OpiumExchangeUnitTest(unittest.TestCase):
     ]
     connector: OpiumExchange
     event_logger: EventLogger
-    trading_pair = 'OEX_FUT_1DEC_135.00-DAI'
+    trading_pair = 'OEX_FUT_1JAN_135.00-DAI'
     base_token, quote_token = trading_pair.split("-")
     stack: contextlib.ExitStack
-
 
     @classmethod
     def setUpClass(cls):
@@ -46,7 +45,7 @@ class OpiumExchangeUnitTest(unittest.TestCase):
             trading_pairs=[cls.trading_pair],
             trading_required=True
         )
-        print("Initializing CryptoCom market... this will take about a minute.")
+        print("Initializing Opium market... this will take about a minute.")
         cls.clock.add_iterator(cls.connector)
         cls.stack: contextlib.ExitStack = contextlib.ExitStack()
         cls._clock = cls.stack.enter_context(cls.clock)
@@ -69,7 +68,6 @@ class OpiumExchangeUnitTest(unittest.TestCase):
             self.connector.remove_listener(event_tag, self.event_logger)
         self.event_logger = None
 
-
     @classmethod
     async def wait_til_ready(cls, connector=None):
         if connector is None:
@@ -89,7 +87,6 @@ class OpiumExchangeUnitTest(unittest.TestCase):
         else:
             cl_order_id = self.connector.sell(self.trading_pair, amount, order_type, price)
         return cl_order_id
-
 
     def test_buy_and_sell(self):
         price = self.connector.get_price(self.trading_pair, True) * Decimal("1.05")
@@ -128,7 +125,9 @@ class OpiumExchangeUnitTest(unittest.TestCase):
         # check available quote balance gets updated, we need to wait a bit for the balance message to arrive
         expected_quote_bal = quote_bal - quote_amount_traded
         self.ev_loop.run_until_complete(asyncio.sleep(1))
-        self.assertAlmostEqual(expected_quote_bal, self.connector.get_available_balance(self.quote_token))
+
+        available_balance = self.connector.get_available_balance(self.quote_token)
+        self.assertAlmostEqual(expected_quote_bal, available_balance)
 
         # Reset the logs
         self.event_logger.clear()
@@ -157,6 +156,6 @@ class OpiumExchangeUnitTest(unittest.TestCase):
         # check available base balance gets updated, we need to wait a bit for the balance message to arrive
         expected_base_bal = base_bal
         self.ev_loop.run_until_complete(asyncio.sleep(1))
-        bl =self.connector.get_available_balance(self.base_token)
+        bl = self.connector.get_available_balance(self.base_token)
         print(f"bl: {bl}")
-        self.assertAlmostEqual(expected_base_bal,bl , 5)
+        self.assertAlmostEqual(expected_base_bal, bl, 5)
